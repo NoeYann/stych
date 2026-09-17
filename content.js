@@ -7,6 +7,20 @@
   let widgetEl = null;
   const correctionOrdersProcessed = new Set();
 
+  // Every read-modify-write on STORAGE_KEY goes through this queue. Without
+  // it, two chrome.storage.local.get()+set() round-trips fired close
+  // together (e.g. clicking through questions quickly) can race: the second
+  // get() reads the state from before the first set() committed, so its
+  // set() silently overwrites the first entry instead of appending to it.
+  let storageQueue = Promise.resolve();
+
+  function withStorageQueue(task) {
+    storageQueue = storageQueue.then(task).catch((err) => {
+      console.error('[Stych Confidence Tracker] storage error', err);
+    });
+    return storageQueue;
+  }
+
   function getIdQst() {
     const input = document.querySelector('#id_qst');
     return input ? input.value : null;
@@ -193,72 +207,93 @@
     const panels = getCorrectionPanels().filter((p) => !correctionOrdersProcessed.has(p.orderNumber));
     if (panels.length === 0) return;
 
-    chrome.storage.local.get([STORAGE_KEY], (result) => {
-      const entries = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
-      let changed = false;
+    withStorageQueue(
+      () =>
+        new Promise((resolve) => {
+          chrome.storage.local.get([STORAGE_KEY], (result) => {
+            const entries = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
+            let changed = false;
 
-      panels.forEach((panel) => {
-        const panelAnswerIds = new Set();
-        panel.subQuestions.forEach((sq) => {
-          sq.selectedAnswerIds.forEach((id) => panelAnswerIds.add(id));
-          sq.correctAnswerIds.forEach((id) => panelAnswerIds.add(id));
-        });
+            panels.forEach((panel) => {
+              const panelAnswerIds = new Set();
+              panel.subQuestions.forEach((sq) => {
+                sq.selectedAnswerIds.forEach((id) => panelAnswerIds.add(id));
+                sq.correctAnswerIds.forEach((id) => panelAnswerIds.add(id));
+              });
 
-        // Primary match: exact question order number (see brief on
-        // panel-qst-N being the shared key between both modes).
-        let entry = entries.find((e) => e.questionNumber === panel.orderNumber);
+              // Primary match: exact question order number (see brief on
+              // panel-qst-N being the shared key between both modes).
+              let entry = entries.find((e) => e.questionNumber === panel.orderNumber);
 
-        // Fallback: overlap on selected answer ids.
-        if (!entry) {
-          entry = entries.find(
-            (e) =>
-              Array.isArray(e.selectedAnswerIds) &&
-              e.selectedAnswerIds.some((id) => panelAnswerIds.has(id))
-          );
-        }
+              // Fallback: overlap on selected answer ids.
+              if (!entry) {
+                entry = entries.find(
+                  (e) =>
+                    Array.isArray(e.selectedAnswerIds) &&
+                    e.selectedAnswerIds.some((id) => panelAnswerIds.has(id))
+                );
+              }
 
-        correctionOrdersProcessed.add(panel.orderNumber);
-        if (!entry) return;
+              correctionOrdersProcessed.add(panel.orderNumber);
+              if (!entry) return;
 
-        entry.matched = true;
-        entry.questionOrderNumber = panel.orderNumber;
-        entry.correctAnswerIds = Array.from(new Set(panel.subQuestions.flatMap((sq) => sq.correctAnswerIds)));
-        entry.isCorrect = panel.subQuestions.every((sq) => sq.isCorrect);
-        entry.explanation = panel.subQuestions
-          .map((sq) => sq.explanation)
-          .filter(Boolean)
-          .join('\n\n');
-        entry.subQuestions = panel.subQuestions.map((sq) => ({
-          text: sq.text,
-          selectedAnswerIds: sq.selectedAnswerIds,
-          correctAnswerIds: sq.correctAnswerIds,
-          selectedAnswerLabels: sq.selectedAnswerLabels,
-          correctAnswerLabels: sq.correctAnswerLabels,
-          isCorrect: sq.isCorrect,
-          explanation: sq.explanation,
-        }));
+              entry.matched = true;
+              entry.questionOrderNumber = panel.orderNumber;
+              entry.correctAnswerIds = Array.from(
+                new Set(panel.subQuestions.flatMap((sq) => sq.correctAnswerIds))
+              );
+              entry.isCorrect = panel.subQuestions.every((sq) => sq.isCorrect);
+              entry.explanation = panel.subQuestions
+                .map((sq) => sq.explanation)
+                .filter(Boolean)
+                .join('\n\n');
+              entry.subQuestions = panel.subQuestions.map((sq) => ({
+                text: sq.text,
+                selectedAnswerIds: sq.selectedAnswerIds,
+                correctAnswerIds: sq.correctAnswerIds,
+                selectedAnswerLabels: sq.selectedAnswerLabels,
+                correctAnswerLabels: sq.correctAnswerLabels,
+                isCorrect: sq.isCorrect,
+                explanation: sq.explanation,
+              }));
 
-        changed = true;
-      });
+              changed = true;
+            });
 
-      if (changed) {
-        chrome.storage.local.set({ [STORAGE_KEY]: entries });
-      }
+            const finishWithScore = () => {
+              const { score, total } = parseScore();
+              if (score !== null && total !== null) {
+                chrome.storage.local.set(
+                  { [SCORE_KEY]: { score, total, timestamp: new Date().toISOString() } },
+                  resolve
+                );
+              } else {
+                resolve();
+              }
+            };
 
-      const { score, total } = parseScore();
-      if (score !== null && total !== null) {
-        chrome.storage.local.set({ [SCORE_KEY]: { score, total, timestamp: new Date().toISOString() } });
-      }
-    });
+            if (changed) {
+              chrome.storage.local.set({ [STORAGE_KEY]: entries }, finishWithScore);
+            } else {
+              finishWithScore();
+            }
+          });
+        })
+    );
   }
 
   function saveEntry(entry) {
-    chrome.storage.local.get([STORAGE_KEY], (result) => {
-      const entries = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
-      const filtered = entries.filter((e) => e.id_qst !== entry.id_qst);
-      filtered.push(entry);
-      chrome.storage.local.set({ [STORAGE_KEY]: filtered });
-    });
+    withStorageQueue(
+      () =>
+        new Promise((resolve) => {
+          chrome.storage.local.get([STORAGE_KEY], (result) => {
+            const entries = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
+            const filtered = entries.filter((e) => e.id_qst !== entry.id_qst);
+            filtered.push(entry);
+            chrome.storage.local.set({ [STORAGE_KEY]: filtered }, resolve);
+          });
+        })
+    );
   }
 
   function handleValidateClick(e) {
@@ -273,6 +308,10 @@
     }
 
     const { questionNumber, totalQuestions } = getQuestionNumbers();
+
+    // Diagnostic — remove once the questionNumber/id_qst capture bug
+    // (see bug report) is confirmed fixed on a full real exam.
+    console.log('[Stych Confidence Tracker] Capture', { idQst, questionNumber, totalQuestions });
 
     saveEntry({
       id_qst: idQst,
