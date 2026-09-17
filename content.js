@@ -1,9 +1,11 @@
 (() => {
   const STORAGE_KEY = 'stychConfidenceEntries';
+  const SCORE_KEY = 'stychLastScore';
 
   let lastIdQst = null;
   let currentConfidence = null;
   let widgetEl = null;
+  const correctionOrdersProcessed = new Set();
 
   function getIdQst() {
     const input = document.querySelector('#id_qst');
@@ -101,6 +103,7 @@
   }
 
   function checkForNewQuestion() {
+    if (isCorrectionPage()) return;
     const idQst = getIdQst();
     if (!idQst) return;
     if (idQst !== lastIdQst) {
@@ -108,6 +111,145 @@
     } else {
       ensureWidget();
     }
+  }
+
+  // --- Correction page (final recap) ---
+
+  function isCorrectionPage() {
+    return !!document.querySelector('.wrapper-resume-result') && !!document.querySelector('.note-result');
+  }
+
+  function parseScore() {
+    const el = document.querySelector('.note-result');
+    if (!el) return { score: null, total: null };
+    const scoreEl = el.querySelector('span');
+    const score = scoreEl ? parseInt(scoreEl.textContent.trim(), 10) : NaN;
+    const totalMatch = el.textContent.match(/\/\s*(\d+)/);
+    const total = totalMatch ? parseInt(totalMatch[1], 10) : NaN;
+    return {
+      score: Number.isNaN(score) ? null : score,
+      total: Number.isNaN(total) ? null : total,
+    };
+  }
+
+  // The class name for a correctly-selected answer isn't confirmed anywhere
+  // in the DOM samples available, so correctness is derived by elimination
+  // from the two confirmed classes (badAnswer / forgetAnswer) rather than by
+  // guessing a "good answer" class name.
+  function parseSubQuestion(qstBox) {
+    const textEl = qstBox.querySelector('.questionnaire_test_qst');
+    const text = textEl ? textEl.textContent.trim() : '';
+
+    const selectedIds = [];
+    const badIds = [];
+    const forgetIds = [];
+    const labelsById = {};
+
+    qstBox.querySelectorAll('.questionnaire_test_reponse').forEach((opt) => {
+      const input = opt.querySelector('.check_response');
+      if (!input) return;
+      const value = input.value;
+      const labelEl = opt.querySelector('label');
+      labelsById[value] = labelEl ? labelEl.textContent.trim().replace(/\s+/g, ' ') : value;
+
+      if (opt.classList.contains('selected')) selectedIds.push(value);
+      if (opt.classList.contains('badAnswer')) badIds.push(value);
+      if (opt.classList.contains('forgetAnswer')) forgetIds.push(value);
+    });
+
+    const correctIds = Array.from(
+      new Set([...forgetIds, ...selectedIds.filter((id) => !badIds.includes(id))])
+    );
+
+    const explanationEl = qstBox.querySelector('p.text-left');
+    const explanation = explanationEl ? explanationEl.textContent.trim() : '';
+
+    return {
+      text,
+      selectedAnswerIds: selectedIds,
+      correctAnswerIds: correctIds,
+      selectedAnswerLabels: selectedIds.map((id) => labelsById[id] || id),
+      correctAnswerLabels: correctIds.map((id) => labelsById[id] || id),
+      isCorrect: badIds.length === 0 && forgetIds.length === 0,
+      explanation,
+    };
+  }
+
+  function getCorrectionPanels() {
+    return Array.from(document.querySelectorAll('.panel-qst'))
+      .map((panelEl) => {
+        const numClass = Array.from(panelEl.classList).find((c) => /^panel-qst-\d+$/.test(c));
+        if (!numClass) return null;
+        const orderNumber = parseInt(numClass.replace('panel-qst-', ''), 10);
+        const subQuestions = Array.from(panelEl.querySelectorAll('.qst_box')).map(parseSubQuestion);
+        return { orderNumber, subQuestions };
+      })
+      .filter(Boolean);
+  }
+
+  function processCorrectionPage() {
+    if (!isCorrectionPage()) return;
+
+    const panels = getCorrectionPanels().filter((p) => !correctionOrdersProcessed.has(p.orderNumber));
+    if (panels.length === 0) return;
+
+    chrome.storage.local.get([STORAGE_KEY], (result) => {
+      const entries = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
+      let changed = false;
+
+      panels.forEach((panel) => {
+        const panelAnswerIds = new Set();
+        panel.subQuestions.forEach((sq) => {
+          sq.selectedAnswerIds.forEach((id) => panelAnswerIds.add(id));
+          sq.correctAnswerIds.forEach((id) => panelAnswerIds.add(id));
+        });
+
+        // Primary match: exact question order number (see brief on
+        // panel-qst-N being the shared key between both modes).
+        let entry = entries.find((e) => e.questionNumber === panel.orderNumber);
+
+        // Fallback: overlap on selected answer ids.
+        if (!entry) {
+          entry = entries.find(
+            (e) =>
+              Array.isArray(e.selectedAnswerIds) &&
+              e.selectedAnswerIds.some((id) => panelAnswerIds.has(id))
+          );
+        }
+
+        correctionOrdersProcessed.add(panel.orderNumber);
+        if (!entry) return;
+
+        entry.matched = true;
+        entry.questionOrderNumber = panel.orderNumber;
+        entry.correctAnswerIds = Array.from(new Set(panel.subQuestions.flatMap((sq) => sq.correctAnswerIds)));
+        entry.isCorrect = panel.subQuestions.every((sq) => sq.isCorrect);
+        entry.explanation = panel.subQuestions
+          .map((sq) => sq.explanation)
+          .filter(Boolean)
+          .join('\n\n');
+        entry.subQuestions = panel.subQuestions.map((sq) => ({
+          text: sq.text,
+          selectedAnswerIds: sq.selectedAnswerIds,
+          correctAnswerIds: sq.correctAnswerIds,
+          selectedAnswerLabels: sq.selectedAnswerLabels,
+          correctAnswerLabels: sq.correctAnswerLabels,
+          isCorrect: sq.isCorrect,
+          explanation: sq.explanation,
+        }));
+
+        changed = true;
+      });
+
+      if (changed) {
+        chrome.storage.local.set({ [STORAGE_KEY]: entries });
+      }
+
+      const { score, total } = parseScore();
+      if (score !== null && total !== null) {
+        chrome.storage.local.set({ [SCORE_KEY]: { score, total, timestamp: new Date().toISOString() } });
+      }
+    });
   }
 
   function saveEntry(entry) {
@@ -149,8 +291,10 @@
 
   const observer = new MutationObserver(() => {
     checkForNewQuestion();
+    processCorrectionPage();
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
   checkForNewQuestion();
+  processCorrectionPage();
 })();

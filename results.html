@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Résultats — Stych Confidence Tracker</title>
+<link rel="stylesheet" href="results.css">
+</head>
+<body>
+  <header>
+    <h1>Mes résultats</h1>
+    <div id="score" class="score">—</div>
+    <button id="download-csv" type="button">Télécharger en CSV</button>
+  </header>
+  <main>
+    <table id="results-table">
+      <thead>
+        <tr>
+          <th>Question</th>
+          <th>Ta réponse</th>
+          <th>Bonne réponse</th>
+          <th>Confiance</th>
+        </tr>
+      </thead>
+      <tbody id="results-body"></tbody>
+    </table>
+    <p id="empty-state" class="empty-state">
+      Aucun résultat trouvé. Termine un examen blanc puis reviens sur cette page.
+    </p>
+  </main>
+  <script src="results.js"></script>
+</body>
+</html>
