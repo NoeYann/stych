@@ -326,13 +326,13 @@
   }
 
   // "Voir mes résultats" button injected directly on Stych's own pages
-  // (home page and correction recap), in addition to the popup. Uses
-  // window.open rather than chrome.tabs.create because this runs as a
-  // content script inside Stych's page, not in the extension's own
+  // (evaluations list and correction recap), in addition to the popup.
+  // Uses window.open rather than chrome.tabs.create because this runs as
+  // a content script inside Stych's page, not in the extension's own
   // privileged context — results.html must be listed in
   // web_accessible_resources for that page to load at all from here.
-  function isHomePage() {
-    return location.pathname === '/elearning/formation-home';
+  function isEvaluationPage() {
+    return /^\/elearning\/formation\/\d+\/evaluation\/?$/.test(location.pathname);
   }
 
   function buildResultsButton() {
@@ -348,7 +348,7 @@
   }
 
   function injectResultsButtonIfNeeded() {
-    if (!isHomePage() && !isCorrectionPage()) return;
+    if (!isEvaluationPage() && !isCorrectionPage()) return;
     if (document.getElementById('stych-confidence-results-button')) return;
 
     document.body.appendChild(buildResultsButton());
