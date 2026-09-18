@@ -98,8 +98,15 @@
   background: #3a7cc0;
 }
 
-/* Correction page: no equivalent button row exists there, so it stays a
-   floating top-right button, clear of the page's own controls. */
+/* Correction page: sits inline in the header's own button row
+   (.btn-gp-log: "Mon compte" / "Deconnexion"), right after them, spaced
+   like their own ml-3 gap. */
+.stych-confidence-results-button.stych-confidence-header {
+  margin-left: 12px;
+  padding: 10px 20px;
+}
+
+/* Fallback only: used if .btn-gp-log isn't found on some header variant. */
 .stych-confidence-results-button.stych-confidence-floating {
   position: fixed;
   top: 20px;

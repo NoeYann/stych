@@ -361,9 +361,16 @@
       li.appendChild(buildResultsButton('stych-confidence-inline'));
       navList.insertBefore(li, navList.firstChild);
     } else if (isCorrectionPage()) {
-      // No equivalent button row exists on this page's header, so this
-      // stays a floating top-right button instead of an inline one.
-      document.body.appendChild(buildResultsButton('stych-confidence-floating'));
+      // Inline in the header's own button row (.btn-gp-log: "Mon compte" /
+      // "Deconnexion"), so it scrolls away with the header like those
+      // buttons instead of staying fixed over the page content below.
+      const btnGroup = document.querySelector('.btn-gp-log');
+      if (btnGroup) {
+        btnGroup.appendChild(buildResultsButton('stych-confidence-header'));
+      } else {
+        // Fallback in case this header variant doesn't have that row.
+        document.body.appendChild(buildResultsButton('stych-confidence-floating'));
+      }
     }
   }
 
