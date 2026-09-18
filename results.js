@@ -2,6 +2,24 @@
   const STORAGE_KEY = 'stychConfidenceEntries';
   const SCORE_KEY = 'stychLastScore';
 
+  // Same definition as content.js: the current exam is whichever testUrl
+  // owns the most recent entry by timestamp. Storage keeps every exam ever
+  // taken, so the table needs this filter to avoid mixing them together.
+  function getCurrentTestUrl(entries) {
+    let latest = null;
+    entries.forEach((e) => {
+      if (!e.testUrl || !e.timestamp) return;
+      if (!latest || e.timestamp > latest.timestamp) latest = e;
+    });
+    return latest ? latest.testUrl : null;
+  }
+
+  function filterToCurrentExam(entries) {
+    const currentTestUrl = getCurrentTestUrl(entries);
+    if (!currentTestUrl) return entries;
+    return entries.filter((e) => e.testUrl === currentTestUrl);
+  }
+
   function buildRows(entries) {
     const rows = [];
 
@@ -133,7 +151,8 @@
 
   function init() {
     chrome.storage.local.get([STORAGE_KEY, SCORE_KEY], (result) => {
-      const entries = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
+      const allEntries = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
+      const entries = filterToCurrentExam(allEntries);
       const rows = buildRows(entries);
       renderTable(rows);
 

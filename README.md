@@ -6,6 +6,27 @@ clic sur "VALIDER", puis croise ces entrées avec la correction affichée en
 fin d'examen. Un tableau de résultats téléchargeable en CSV est accessible
 via l'icône de l'extension.
 
+## Gestion multi-examens
+
+`stychConfidenceEntries` conserve l'historique de tous les examens jamais
+passés (pas de purge automatique à chaque nouvelle tentative, pour ne pas
+fermer la porte à une future vue d'agrégation multi-examens). En revanche :
+
+- Le tableau de résultats (`results.js`) et le matching de correction
+  (`content.js`) se limitent tous les deux à l'examen **le plus récent**,
+  déterminé par le `testUrl` de l'entrée au `timestamp` le plus élevé en
+  storage (la page de correction n'expose `test_url` nulle part dans son
+  DOM — vérifié — donc c'est la seule façon fiable de scoper sans lui).
+- Au chargement de `content.js`, une passe de nettoyage
+  (`cleanupStorage()`) supprime les groupes d'entrées orphelines : celles
+  qui ne sont liées à aucun examen corrigé (`matched: false` sur tout le
+  groupe) et dont le nombre d'entrées est strictement inférieur au
+  `totalQuestions` qu'elles rapportent elles-mêmes — signature typique des
+  entrées perdues par l'ancien bug de race condition sur le storage
+  (corrigé, mais qui a laissé des reliquats). L'examen le plus récent n'est
+  jamais ciblé par ce nettoyage, même s'il est encore incomplet (examen en
+  cours).
+
 ## Installation (dev)
 
 1. `chrome://extensions`
@@ -41,22 +62,20 @@ Mode question :
 - [ ] Valeur exacte de `.questionnaire_test_multiple` pour un QCM à choix
       unique (actuellement seul "Plusieurs réponses" est documenté)
 
-Mode correction :
-- [ ] Nom exact de la classe pour une réponse juste sélectionnée. Non requis
-      par l'implémentation actuelle (la correction se déduit par élimination
-      des classes confirmées `badAnswer`/`forgetAnswer`), mais à confirmer
-      si un jour un cas ne correspond pas au résultat attendu.
-- [ ] Les blocs `.panel-qst-N` sont-ils tous présents au chargement de la
-      page de récap (juste masqués en CSS), ou chargés au clic sur chaque
-      pastille ? Dans les deux cas `processCorrectionPage()` est rappelée à
-      chaque mutation DOM et traite les panneaux au fur et à mesure de leur
-      apparition — mais si tout est chargé en AJAX au clic, penser à cliquer
-      chaque pastille avant d'ouvrir la page de résultats pour une capture
-      complète.
-- [ ] Confirmer que `id="panel-qst-N"` correspond bien au même numéro
-      d'ordre que `.questionnaire_test_numquestion` en mode question
-      (utilisé comme clé de correspondance principale, avec un repli sur le
-      chevauchement de `selectedAnswerIds` si aucune entrée ne correspond).
+Mode correction (confirmé sur DOM réel) :
+- [x] Classe pour une réponse juste sélectionnée : `selected goodAnswer`
+      (confirmé). L'implémentation ne s'appuie toujours pas sur ce nom —
+      elle déduit la correction par élimination via `badAnswer`/
+      `forgetAnswer` — mais c'est désormais documenté par preuve, pas par
+      hypothèse.
+- [x] Les 40 blocs `.panel-qst-N` sont tous présents au chargement de la
+      page de récap, masqués via la règle CSS `.panel-qst { display:none; }`
+      — pas de chargement AJAX au clic. Aucune interaction requise avant de
+      lire les résultats.
+- [x] `id="panel-qst-N"` est sur la pastille `.box-resume-result` (résumé
+      cliquable), pas sur le bloc détail — le bloc détail porte `panel-qst-N`
+      comme **classe** (`class="panel-qst container panel-qst-N"`). Le code
+      cible bien la classe, pas l'id.
 
 Le stockage garde `matched: false` pour toute entrée qui n'a pas pu être
 recoupée avec la page de correction (examen interrompu, désynchronisation) —

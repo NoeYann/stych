@@ -127,6 +127,70 @@
     }
   }
 
+  // --- Multi-exam scoping ---
+  //
+  // stychConfidenceEntries accumulates entries across every exam attempt
+  // ever taken (kept deliberately, so a future history/aggregation view
+  // isn't foreclosed). The "current" exam is identified as whichever
+  // testUrl owns the most recent entry by timestamp — the correction page
+  // always immediately follows that same exam's last question, so this is
+  // a reliable way to scope matching/display without testUrl being present
+  // anywhere on the correction page itself (verified absent from the DOM).
+
+  function getCurrentTestUrl(entries) {
+    let latest = null;
+    entries.forEach((e) => {
+      if (!e.testUrl || !e.timestamp) return;
+      if (!latest || e.timestamp > latest.timestamp) latest = e;
+    });
+    return latest ? latest.testUrl : null;
+  }
+
+  // Before the storage-write race condition was fixed, clicking through an
+  // exam quickly meant only the last click's write reliably survived,
+  // leaving a single matched:false entry stranded for that exam. Detect
+  // such orphan groups (never matched, and holding fewer entries than the
+  // exam's own reported totalQuestions) and drop them — except the current
+  // exam's group, which is legitimately incomplete while still in progress.
+  function cleanupOrphanEntries(entries, currentTestUrl) {
+    const groups = new Map();
+    entries.forEach((e) => {
+      const key = e.testUrl || '';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(e);
+    });
+
+    const toRemove = new Set();
+    groups.forEach((group, testUrl) => {
+      if (testUrl === currentTestUrl) return;
+      if (group.some((e) => e.matched)) return;
+      const expectedTotal = group.reduce((max, e) => Math.max(max, e.totalQuestions || 0), 0);
+      if (expectedTotal > 0 && group.length < expectedTotal) {
+        group.forEach((e) => toRemove.add(e));
+      }
+    });
+
+    return entries.filter((e) => !toRemove.has(e));
+  }
+
+  function cleanupStorage() {
+    withStorageQueue(
+      () =>
+        new Promise((resolve) => {
+          chrome.storage.local.get([STORAGE_KEY], (result) => {
+            const entries = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
+            const currentTestUrl = getCurrentTestUrl(entries);
+            const cleaned = cleanupOrphanEntries(entries, currentTestUrl);
+            if (cleaned.length !== entries.length) {
+              chrome.storage.local.set({ [STORAGE_KEY]: cleaned }, resolve);
+            } else {
+              resolve();
+            }
+          });
+        })
+    );
+  }
+
   // --- Correction page (final recap) ---
 
   function isCorrectionPage() {
@@ -212,6 +276,7 @@
         new Promise((resolve) => {
           chrome.storage.local.get([STORAGE_KEY], (result) => {
             const entries = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
+            const currentTestUrl = getCurrentTestUrl(entries);
             let changed = false;
 
             panels.forEach((panel) => {
@@ -221,14 +286,23 @@
                 sq.correctAnswerIds.forEach((id) => panelAnswerIds.add(id));
               });
 
+              // Matching is scoped to the current exam's testUrl first:
+              // questionNumber alone repeats across every exam attempt
+              // (1..totalQuestions each time), so without this an older
+              // attempt's entry sharing the same questionNumber could be
+              // matched instead of the exam actually being corrected.
+
               // Primary match: exact question order number (see brief on
               // panel-qst-N being the shared key between both modes).
-              let entry = entries.find((e) => e.questionNumber === panel.orderNumber);
+              let entry = entries.find(
+                (e) => e.testUrl === currentTestUrl && e.questionNumber === panel.orderNumber
+              );
 
               // Fallback: overlap on selected answer ids.
               if (!entry) {
                 entry = entries.find(
                   (e) =>
+                    e.testUrl === currentTestUrl &&
                     Array.isArray(e.selectedAnswerIds) &&
                     e.selectedAnswerIds.some((id) => panelAnswerIds.has(id))
                 );
@@ -309,10 +383,6 @@
 
     const { questionNumber, totalQuestions } = getQuestionNumbers();
 
-    // Diagnostic — remove once the questionNumber/id_qst capture bug
-    // (see bug report) is confirmed fixed on a full real exam.
-    console.log('[Stych Confidence Tracker] Capture', { idQst, questionNumber, totalQuestions });
-
     saveEntry({
       id_qst: idQst,
       testUrl: getTestUrl(),
@@ -334,6 +404,7 @@
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
+  cleanupStorage();
   checkForNewQuestion();
   processCorrectionPage();
 })();
