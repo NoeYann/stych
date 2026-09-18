@@ -53,10 +53,16 @@ Une fois l'examen terminé (page de récapitulatif affichée), cliquer sur
 l'icône de l'extension → "Voir mes résultats". La page s'ouvre dans un
 nouvel onglet, lit `chrome.storage.local` et affiche l'examen le plus
 récent par défaut. Un sélecteur en haut de page (`#exam-select`) permet de
-choisir n'importe quel examen passé. Deux filtres, combinables (ET
-logique) : "Questions loupées" (réponse effectivement fausse, exclut les
-questions non recoupées avec une correction) et "Confiance faible (1-2)".
-Le bouton "Télécharger en CSV" exporte exactement les lignes actuellement
+choisir n'importe quel examen passé, libellé "Examen N — date — score" (N
+= le numéro que Stych affiche lui-même comme "Examen Blanc N" sur l'accueil,
+extrait de `testUrl` — confirmé identique au `data-num_serie` de cette page
+pour les 29 examens listés, donc dérivé sans capture supplémentaire, y
+compris pour les examens déjà enregistrés avant ce changement). Deux
+filtres, combinables en **OU** (cocher les deux affiche une question qui
+correspond à au moins l'un des deux critères) : "Questions loupées"
+(réponse effectivement fausse, exclut les questions non recoupées avec une
+correction) et "Confiance faible (1-2)". Le bouton "Télécharger en CSV"
+exporte exactement les lignes actuellement
 affichées (examen + filtres sélectionnés), pas l'examen entier.
 
 ## Points à vérifier en test réel (voir brief, section 7)

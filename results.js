@@ -2,6 +2,17 @@
   const STORAGE_KEY = 'stychConfidenceEntries';
   const SCORES_KEY = 'stychExamScores';
 
+  // The number Stych itself shows as "Examen Blanc N" is identical to the
+  // testN segment of testUrl (confirmed across all 29 exams listed on the
+  // home page, e.g. test7 <-> "Examen Blanc 7", also matching that page's
+  // own data-num_serie="7" attribute) — no separate capture needed, and it
+  // works retroactively for every exam already in storage.
+  function getExamNumber(testUrl) {
+    if (!testUrl) return null;
+    const match = testUrl.match(/\/test(\d+)\//);
+    return match ? match[1] : null;
+  }
+
   function formatDate(iso) {
     if (!iso) return 'Date inconnue';
     const d = new Date(iso);
@@ -233,7 +244,9 @@
         const scoreLabel = group.scoreInfo
           ? `${group.scoreInfo.score} / ${group.scoreInfo.total}`
           : 'non terminé';
-        option.textContent = `${formatDate(group.timestamp)} — ${scoreLabel}`;
+        const examNumber = getExamNumber(group.testUrl);
+        const examLabel = examNumber ? `Examen ${examNumber}` : 'Examen ?';
+        option.textContent = `${examLabel} — ${formatDate(group.timestamp)} — ${scoreLabel}`;
         examSelect.appendChild(option);
       });
 
