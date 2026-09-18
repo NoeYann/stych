@@ -1,4 +1,4 @@
-# Stych Suivi
+# Stych Confidence Tracker
 
 Extension Chrome (Manifest V3). Injecte un widget de confiance (1-3) sur les
 écrans d'examen blanc Stych, capture l'état de chaque question au moment du
@@ -53,7 +53,7 @@ Une fois l'examen terminé (page de récapitulatif affichée), cliquer sur
 l'icône de l'extension → "Voir mes résultats". La page s'ouvre dans un
 nouvel onglet, lit `chrome.storage.local` et affiche l'examen le plus
 récent par défaut. Un sélecteur en haut de page (`#exam-select`) permet de
-choisir n'importe quel examen passé, libellé "Examen N — score — date" (N
+choisir n'importe quel examen passé, libellé "Examen N — date — score" (N
 = le numéro que Stych affiche lui-même comme "Examen Blanc N" sur l'accueil,
 extrait de `testUrl` — confirmé identique au `data-num_serie` de cette page
 pour les 29 examens listés, donc dérivé sans capture supplémentaire, y
@@ -64,15 +64,6 @@ correspond à au moins l'un des deux critères) : "Questions loupées"
 correction) et "Confiance faible (1-2)". Le bouton "Télécharger en CSV"
 exporte exactement les lignes actuellement
 affichées (examen + filtres sélectionnés), pas l'examen entier.
-
-Un bouton "Voir mes résultats" (même libellé que dans le popup) est aussi
-injecté directement sur la page d'accueil (`/elearning/formation-home`) et
-sur la page de correction, en position fixe bas-droite — pas seulement
-accessible via l'icône de l'extension. Nécessite que `results.html`
-(+ `.js`/`.css`) soit déclaré dans `web_accessible_resources` du manifest,
-puisque l'ouverture se fait via `window.open()` depuis un content script
-(contexte de la page Stych elle-même), pas via `chrome.tabs.create()` comme
-dans `popup.js` (API non disponible aux content scripts).
 
 ## Points à vérifier en test réel (voir brief, section 7)
 

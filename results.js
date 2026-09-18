@@ -246,7 +246,7 @@
           : 'non terminé';
         const examNumber = getExamNumber(group.testUrl);
         const examLabel = examNumber ? `Examen ${examNumber}` : 'Examen ?';
-        option.textContent = `${examLabel} — ${scoreLabel} — ${formatDate(group.timestamp)}`;
+        option.textContent = `${examLabel} — ${formatDate(group.timestamp)} — ${scoreLabel}`;
         examSelect.appendChild(option);
       });
 
