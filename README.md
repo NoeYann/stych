@@ -1,4 +1,4 @@
-# Stych Confidence Tracker
+# Stych Suivi
 
 Extension Chrome (Manifest V3). Injecte un widget de confiance (1-3) sur les
 écrans d'examen blanc Stych, capture l'état de chaque question au moment du

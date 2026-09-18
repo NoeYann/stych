@@ -18,7 +18,7 @@
 
   function withStorageQueue(task) {
     storageQueue = storageQueue.then(task).catch((err) => {
-      console.error('[Stych Confidence Tracker] storage error', err);
+      console.error('[Stych Suivi] storage error', err);
     });
     return storageQueue;
   }

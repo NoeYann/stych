@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "Stych Confidence Tracker",
-  "version": "0.4.0",
+  "name": "Stych Suivi",
+  "version": "0.4.1",
   "description": "Capture ton niveau de confiance avant chaque validation de question sur les examens blancs Stych, et consulte tes résultats corrigés.",
   "permissions": ["storage"],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Stych Confidence Tracker"
+    "default_title": "Stych Suivi"
   },
   "content_scripts": [
     {
