@@ -80,6 +80,24 @@ td.cell-incorrect {
   color: #a11d1d;
 }
 
+td.confidence-1 {
+  background: #fbe4e4;
+  color: #a11d1d;
+  font-weight: 600;
+}
+
+td.confidence-2 {
+  background: #fff3cd;
+  color: #8a6d1d;
+  font-weight: 600;
+}
+
+td.confidence-3 {
+  background: #e3f7e6;
+  color: #1a6b2e;
+  font-weight: 600;
+}
+
 .empty-state {
   color: #666;
   font-size: 14px;

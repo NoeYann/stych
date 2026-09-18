@@ -81,12 +81,31 @@
     return confidence === null || confidence === undefined ? 'Non renseigné' : String(confidence);
   }
 
+  // Shared red/yellow/green scale (1/2/3) — kept consistent with the badge
+  // injected on Stych's own correction page, which uses the same classes.
+  function confidenceClass(confidence) {
+    if (confidence === 1) return 'confidence-1';
+    if (confidence === 2) return 'confidence-2';
+    if (confidence === 3) return 'confidence-3';
+    return null;
+  }
+
   function renderTable(rows) {
     const tbody = document.getElementById('results-body');
     tbody.innerHTML = '';
 
     rows.forEach((row) => {
       const tr = document.createElement('tr');
+
+      const numberTd = document.createElement('td');
+      numberTd.textContent = row.orderNumber ?? '—';
+      tr.appendChild(numberTd);
+
+      const confidenceTd = document.createElement('td');
+      confidenceTd.textContent = confidenceText(row.confidence);
+      const confClass = confidenceClass(row.confidence);
+      if (confClass) confidenceTd.classList.add(confClass);
+      tr.appendChild(confidenceTd);
 
       const questionTd = document.createElement('td');
       questionTd.textContent = row.text;
@@ -102,10 +121,6 @@
       const correctTd = document.createElement('td');
       correctTd.textContent = row.correctLabel;
       tr.appendChild(correctTd);
-
-      const confidenceTd = document.createElement('td');
-      confidenceTd.textContent = confidenceText(row.confidence);
-      tr.appendChild(confidenceTd);
 
       tbody.appendChild(tr);
     });
@@ -123,12 +138,19 @@
   }
 
   function toCsv(rows) {
-    const header = ['Question', 'Ta reponse', 'Bonne reponse', 'Confiance', 'Resultat'];
+    const header = ['N', 'Confiance', 'Question', 'Ta reponse', 'Bonne reponse', 'Resultat'];
     const lines = [header.join(';')];
 
     rows.forEach((row) => {
       const resultText = row.available ? (row.isCorrect ? 'Juste' : 'Faux') : 'Non disponible';
-      const cells = [row.text, row.selectedLabel, row.correctLabel, confidenceText(row.confidence), resultText];
+      const cells = [
+        row.orderNumber ?? '',
+        confidenceText(row.confidence),
+        row.text,
+        row.selectedLabel,
+        row.correctLabel,
+        resultText,
+      ];
       lines.push(cells.map(csvEscape).join(';'));
     });
 
