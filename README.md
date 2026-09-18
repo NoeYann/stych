@@ -1,4 +1,4 @@
-# Stych Confidence Tracker
+# Stych Suivi
 
 Extension Chrome (Manifest V3). Injecte un widget de confiance (1-3) sur les
 écrans d'examen blanc Stych, capture l'état de chaque question au moment du
@@ -65,13 +65,17 @@ correction) et "Confiance faible (1-2)". Le bouton "Télécharger en CSV"
 exporte exactement les lignes actuellement
 affichées (examen + filtres sélectionnés), pas l'examen entier.
 
-Un bouton "Voir mes résultats" (même libellé que dans le popup) est aussi
-injecté directement sur la page d'accueil (`/elearning/formation-home`) et
-sur la page de correction, en position fixe bas-droite — pas seulement
-accessible via l'icône de l'extension. Ouvert via `window.open()` (un
-content script n'a pas accès à `chrome.tabs.create()`, réservé aux contextes
-privilégiés comme `popup.js`), ce qui nécessite de déclarer `results.html`
-(+ `.js`/`.css`) dans `web_accessible_resources`.
+Un bouton "Voir mes résultats" (même libellé que dans le popup, tooltip
+"Stych Suivi" au survol) est aussi injecté directement sur Stych, sans
+passer par l'icône de l'extension : sur la page des évaluations
+(`/elearning/formation/<id>/evaluation`), inséré comme élément à part
+entière de la barre `<nav class="topbar">` de Stych (premier item, avant
+la cloche/le panier/le compte, aligné sur leur hauteur) ; sur la page de
+correction, qui n'a pas cette même barre, en position fixe haut-droite.
+Ouvert via `window.open()` (un content script n'a pas accès à
+`chrome.tabs.create()`, réservé aux contextes privilégiés comme
+`popup.js`), ce qui nécessite de déclarer `results.html` (+ `.js`/`.css`)
+dans `web_accessible_resources`.
 
 **Piège rencontré sur `web_accessible_resources[].matches`** : contrairement
 à `content_scripts.matches`, ce champ **refuse** un schéma ou un hôte

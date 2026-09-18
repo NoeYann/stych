@@ -109,6 +109,19 @@
     return { score: matched.filter((e) => e.isCorrect).length, total: matched.length };
   }
 
+  // Average of the rows currently shown in the table — deliberately driven
+  // by that same row list (not the raw entries) so it stays correct once
+  // the table can show more than one exam's rows at a time: it just
+  // reflects whatever's visible, no separate aggregation logic needed.
+  // Rows with no confidence recorded are excluded rather than counted as 0.
+  function computeAverageConfidence(rows) {
+    const rated = rows.filter(
+      (row) => row.confidence === 1 || row.confidence === 2 || row.confidence === 3
+    );
+    if (!rated.length) return null;
+    return rated.reduce((sum, row) => sum + row.confidence, 0) / rated.length;
+  }
+
   function confidenceText(confidence) {
     return confidence === null || confidence === undefined ? 'Non renseigné' : String(confidence);
   }
@@ -227,12 +240,14 @@
 
       const examSelect = document.getElementById('exam-select');
       const scoreEl = document.getElementById('score');
+      const avgConfidenceEl = document.getElementById('avg-confidence');
       const missedCheckbox = document.getElementById('filter-missed');
       const lowConfidenceCheckbox = document.getElementById('filter-low-confidence');
 
       if (!examGroups.length) {
         renderTable([], 'Aucun résultat trouvé. Termine un examen blanc puis reviens sur cette page.');
         scoreEl.textContent = 'Pas encore de résultat';
+        avgConfidenceEl.textContent = 'Pas encore de résultat';
         examSelect.style.display = 'none';
         document.getElementById('download-csv').style.display = 'none';
         return;
@@ -265,6 +280,12 @@
         scoreEl.textContent = group.scoreInfo
           ? `${group.scoreInfo.score} / ${group.scoreInfo.total}`
           : 'Pas encore de résultat';
+
+        const avgConfidence = computeAverageConfidence(visibleRows);
+        avgConfidenceEl.textContent =
+          avgConfidence === null
+            ? 'Confiance : —'
+            : `Confiance : ${avgConfidence.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / 3`;
       }
 
       examSelect.addEventListener('change', render);

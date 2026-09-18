@@ -18,7 +18,7 @@
 
   function withStorageQueue(task) {
     storageQueue = storageQueue.then(task).catch((err) => {
-      console.error('[Stych Confidence Tracker] storage error', err);
+      console.error('[Stych Suivi] storage error', err);
     });
     return storageQueue;
   }
@@ -340,7 +340,7 @@
     button.type = 'button';
     button.id = 'stych-confidence-results-button';
     button.className = 'stych-confidence-results-button ' + variant;
-    button.title = 'Stych Confidence Tracker';
+    button.title = 'Stych Suivi';
     button.textContent = 'Voir mes résultats';
     button.addEventListener('click', () => {
       window.open(chrome.runtime.getURL('results.html'), '_blank');
