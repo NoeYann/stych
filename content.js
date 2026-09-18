@@ -1,6 +1,8 @@
 (() => {
   const STORAGE_KEY = 'stychConfidenceEntries';
-  const SCORE_KEY = 'stychLastScore';
+  // Keyed by testUrl (not a single "last score" slot) so the history view
+  // can show the correct score for any past exam, not just the latest one.
+  const SCORES_KEY = 'stychExamScores';
 
   let lastIdQst = null;
   let currentConfidence = null;
@@ -394,14 +396,18 @@
 
             const finishWithScore = () => {
               const { score, total } = parseScore();
-              if (score !== null && total !== null) {
-                chrome.storage.local.set(
-                  { [SCORE_KEY]: { score, total, timestamp: new Date().toISOString() } },
-                  resolve
-                );
-              } else {
+              if (score === null || total === null) {
                 resolve();
+                return;
               }
+              chrome.storage.local.get([SCORES_KEY], (scoreResult) => {
+                const scores =
+                  scoreResult[SCORES_KEY] && typeof scoreResult[SCORES_KEY] === 'object'
+                    ? scoreResult[SCORES_KEY]
+                    : {};
+                scores[currentTestUrl] = { score, total, timestamp: new Date().toISOString() };
+                chrome.storage.local.set({ [SCORES_KEY]: scores }, resolve);
+              });
             };
 
             if (changed) {

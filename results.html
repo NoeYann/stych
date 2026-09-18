@@ -8,7 +8,16 @@
 <body>
   <header>
     <h1>Mes résultats</h1>
+    <select id="exam-select"></select>
     <div id="score" class="score">—</div>
+    <label class="filter-toggle">
+      <input type="checkbox" id="filter-missed">
+      Questions loupées
+    </label>
+    <label class="filter-toggle">
+      <input type="checkbox" id="filter-low-confidence">
+      Confiance faible (1-2)
+    </label>
     <button id="download-csv" type="button">Télécharger en CSV</button>
   </header>
   <main>

@@ -9,14 +9,20 @@ via l'icône de l'extension.
 ## Gestion multi-examens
 
 `stychConfidenceEntries` conserve l'historique de tous les examens jamais
-passés (pas de purge automatique à chaque nouvelle tentative, pour ne pas
-fermer la porte à une future vue d'agrégation multi-examens). En revanche :
+passés (pas de purge automatique à chaque nouvelle tentative). Chaque
+examen a son propre score, stocké dans `stychExamScores` (map indexée par
+`testUrl`, remplace l'ancienne clé unique `stychLastScore` qui n'aurait pu
+garder que le score du tout dernier examen) — lu directement depuis le DOM
+de Stych au moment de la correction, donc exact même pour un examen ancien.
 
-- Le tableau de résultats (`results.js`) et le matching de correction
-  (`content.js`) se limitent tous les deux à l'examen **le plus récent**,
-  déterminé par le `testUrl` de l'entrée au `timestamp` le plus élevé en
-  storage (la page de correction n'expose `test_url` nulle part dans son
-  DOM — vérifié — donc c'est la seule façon fiable de scoper sans lui).
+- Le **matching de correction** (`content.js`) reste scopé à l'examen **le
+  plus récent** au moment où la page de correction s'affiche, déterminé par
+  le `testUrl` de l'entrée au `timestamp` le plus élevé en storage (la page
+  de correction n'expose `test_url` nulle part dans son DOM — vérifié).
+- La **page de résultats** (`results.js`) propose désormais un sélecteur
+  d'examen (`#exam-select`, triés du plus récent au plus ancien, chacun
+  affiché avec sa date et son score) plutôt que de se limiter au dernier —
+  voir section suivante.
 - Au chargement de `content.js`, une passe de nettoyage
   (`cleanupStorage()`) supprime les groupes d'entrées orphelines : celles
   qui ne sont liées à aucun examen corrigé (`matched: false` sur tout le
@@ -45,8 +51,13 @@ chrome.storage.local.get('stychConfidenceEntries', console.log);
 
 Une fois l'examen terminé (page de récapitulatif affichée), cliquer sur
 l'icône de l'extension → "Voir mes résultats". La page s'ouvre dans un
-nouvel onglet, lit `chrome.storage.local` et propose un bouton "Télécharger
-en CSV" (séparateur `;`, BOM UTF-8 pour Excel).
+nouvel onglet, lit `chrome.storage.local` et affiche l'examen le plus
+récent par défaut. Un sélecteur en haut de page (`#exam-select`) permet de
+choisir n'importe quel examen passé. Deux filtres, combinables (ET
+logique) : "Questions loupées" (réponse effectivement fausse, exclut les
+questions non recoupées avec une correction) et "Confiance faible (1-2)".
+Le bouton "Télécharger en CSV" exporte exactement les lignes actuellement
+affichées (examen + filtres sélectionnés), pas l'examen entier.
 
 ## Points à vérifier en test réel (voir brief, section 7)
 

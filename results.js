@@ -1,23 +1,44 @@
 (() => {
   const STORAGE_KEY = 'stychConfidenceEntries';
-  const SCORE_KEY = 'stychLastScore';
+  const SCORES_KEY = 'stychExamScores';
 
-  // Same definition as content.js: the current exam is whichever testUrl
-  // owns the most recent entry by timestamp. Storage keeps every exam ever
-  // taken, so the table needs this filter to avoid mixing them together.
-  function getCurrentTestUrl(entries) {
-    let latest = null;
-    entries.forEach((e) => {
-      if (!e.testUrl || !e.timestamp) return;
-      if (!latest || e.timestamp > latest.timestamp) latest = e;
+  function formatDate(iso) {
+    if (!iso) return 'Date inconnue';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return 'Date inconnue';
+    return d.toLocaleString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
-    return latest ? latest.testUrl : null;
   }
 
-  function filterToCurrentExam(entries) {
-    const currentTestUrl = getCurrentTestUrl(entries);
-    if (!currentTestUrl) return entries;
-    return entries.filter((e) => e.testUrl === currentTestUrl);
+  // One group per exam attempt (testUrl), newest first. Each group carries
+  // its own score — either the one persisted at correction time (accurate,
+  // read straight off Stych's own DOM) or, for an exam whose correction
+  // page was never visited, the same matched/isCorrect fallback computeScore()
+  // already used for the single-exam view.
+  function getExamGroups(entries, scores) {
+    const groups = new Map();
+    entries.forEach((e) => {
+      if (!e.testUrl) return;
+      if (!groups.has(e.testUrl)) groups.set(e.testUrl, []);
+      groups.get(e.testUrl).push(e);
+    });
+
+    return Array.from(groups.entries())
+      .map(([testUrl, groupEntries]) => {
+        const scoreInfo = computeScore(groupEntries, scores[testUrl]);
+        const latestEntryTimestamp = groupEntries.reduce(
+          (max, e) => (e.timestamp && e.timestamp > max ? e.timestamp : max),
+          ''
+        );
+        const timestamp = (scores[testUrl] && scores[testUrl].timestamp) || latestEntryTimestamp;
+        return { testUrl, entries: groupEntries, scoreInfo, timestamp };
+      })
+      .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
   }
 
   function buildRows(entries) {
@@ -90,7 +111,7 @@
     return null;
   }
 
-  function renderTable(rows) {
+  function renderTable(rows, emptyMessage) {
     const tbody = document.getElementById('results-body');
     tbody.innerHTML = '';
 
@@ -126,7 +147,11 @@
     });
 
     document.getElementById('results-table').style.display = rows.length ? '' : 'none';
-    document.getElementById('empty-state').style.display = rows.length ? 'none' : '';
+    const emptyStateEl = document.getElementById('empty-state');
+    emptyStateEl.style.display = rows.length ? 'none' : '';
+    if (!rows.length && emptyMessage) {
+      emptyStateEl.textContent = emptyMessage;
+    }
   }
 
   function csvEscape(value) {
@@ -171,19 +196,66 @@
     URL.revokeObjectURL(url);
   }
 
+  function applyRowFilters(rows, filters) {
+    return rows.filter((row) => {
+      if (filters.missedOnly && !(row.available && row.isCorrect === false)) return false;
+      if (filters.lowConfidenceOnly && !(row.confidence === 1 || row.confidence === 2)) return false;
+      return true;
+    });
+  }
+
   function init() {
-    chrome.storage.local.get([STORAGE_KEY, SCORE_KEY], (result) => {
+    chrome.storage.local.get([STORAGE_KEY, SCORES_KEY], (result) => {
       const allEntries = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
-      const entries = filterToCurrentExam(allEntries);
-      const rows = buildRows(entries);
-      renderTable(rows);
+      const scores = result[SCORES_KEY] && typeof result[SCORES_KEY] === 'object' ? result[SCORES_KEY] : {};
+      const examGroups = getExamGroups(allEntries, scores);
 
-      const scoreInfo = computeScore(entries, result[SCORE_KEY]);
-      document.getElementById('score').textContent = scoreInfo
-        ? `${scoreInfo.score} / ${scoreInfo.total}`
-        : 'Pas encore de résultat';
+      const examSelect = document.getElementById('exam-select');
+      const scoreEl = document.getElementById('score');
+      const missedCheckbox = document.getElementById('filter-missed');
+      const lowConfidenceCheckbox = document.getElementById('filter-low-confidence');
 
-      document.getElementById('download-csv').addEventListener('click', () => downloadCsv(rows));
+      if (!examGroups.length) {
+        renderTable([], 'Aucun résultat trouvé. Termine un examen blanc puis reviens sur cette page.');
+        scoreEl.textContent = 'Pas encore de résultat';
+        examSelect.style.display = 'none';
+        document.getElementById('download-csv').style.display = 'none';
+        return;
+      }
+
+      examGroups.forEach((group, index) => {
+        const option = document.createElement('option');
+        option.value = String(index);
+        const scoreLabel = group.scoreInfo
+          ? `${group.scoreInfo.score} / ${group.scoreInfo.total}`
+          : 'non terminé';
+        option.textContent = `${formatDate(group.timestamp)} — ${scoreLabel}`;
+        examSelect.appendChild(option);
+      });
+
+      let visibleRows = [];
+
+      function render() {
+        const group = examGroups[Number(examSelect.value)];
+        const allRows = buildRows(group.entries);
+        const filters = {
+          missedOnly: missedCheckbox.checked,
+          lowConfidenceOnly: lowConfidenceCheckbox.checked,
+        };
+        visibleRows = applyRowFilters(allRows, filters);
+
+        renderTable(visibleRows, 'Aucune question ne correspond aux filtres sélectionnés.');
+        scoreEl.textContent = group.scoreInfo
+          ? `${group.scoreInfo.score} / ${group.scoreInfo.total}`
+          : 'Pas encore de résultat';
+      }
+
+      examSelect.addEventListener('change', render);
+      missedCheckbox.addEventListener('change', render);
+      lowConfidenceCheckbox.addEventListener('change', render);
+      document.getElementById('download-csv').addEventListener('click', () => downloadCsv(visibleRows));
+
+      render();
     });
   }
 

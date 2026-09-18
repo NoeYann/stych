@@ -32,6 +32,29 @@ h1 {
   border: 1px solid #ddd;
 }
 
+select#exam-select {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  background: #fff;
+  font-size: 14px;
+  max-width: 280px;
+}
+
+.filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+  user-select: none;
+}
+
+.filter-toggle input {
+  cursor: pointer;
+}
+
 button#download-csv {
   padding: 10px 16px;
   border: none;
