@@ -79,15 +79,9 @@
   background: #1a6b2e;
 }
 
-/* Floating "Voir mes résultats" button, injected on the home page and the
-   correction page. Bottom-right, away from Stych's own cookie-consent
-   widget which sits bottom-left. */
+/* "Voir mes résultats" button, injected on the evaluations page and the
+   correction page. Base style shared by both placements below. */
 .stych-confidence-results-button {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 999999;
-  padding: 12px 20px;
   border: none;
   border-radius: 999px;
   background: #4a90d9;
@@ -95,11 +89,37 @@
   font-size: 14px;
   font-weight: 700;
   font-family: system-ui, -apple-system, sans-serif;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   cursor: pointer;
   transition: background 0.15s ease;
+  white-space: nowrap;
 }
 
 .stych-confidence-results-button:hover {
   background: #3a7cc0;
+}
+
+/* Correction page: no equivalent button row exists there, so it stays a
+   floating top-right button, clear of the page's own controls. */
+.stych-confidence-results-button.stych-confidence-floating {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 999999;
+  padding: 12px 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Evaluations page: sits inline in Stych's own top-right button row
+   (notifications, cart, account), sized to align with those ~40px icons. */
+.stych-confidence-nav-item {
+  display: flex;
+  align-items: center;
+  margin-right: 8px;
+}
+
+.stych-confidence-results-button.stych-confidence-inline {
+  height: 40px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
 }

@@ -335,11 +335,12 @@
     return /^\/elearning\/formation\/\d+\/evaluation\/?$/.test(location.pathname);
   }
 
-  function buildResultsButton() {
+  function buildResultsButton(variant) {
     const button = document.createElement('button');
     button.type = 'button';
     button.id = 'stych-confidence-results-button';
-    button.className = 'stych-confidence-results-button';
+    button.className = 'stych-confidence-results-button ' + variant;
+    button.title = 'Stych Confidence Tracker';
     button.textContent = 'Voir mes résultats';
     button.addEventListener('click', () => {
       window.open(chrome.runtime.getURL('results.html'), '_blank');
@@ -348,10 +349,22 @@
   }
 
   function injectResultsButtonIfNeeded() {
-    if (!isEvaluationPage() && !isCorrectionPage()) return;
     if (document.getElementById('stych-confidence-results-button')) return;
 
-    document.body.appendChild(buildResultsButton());
+    if (isEvaluationPage()) {
+      // Inline in the page's own top-right button row (notifications, cart,
+      // account), so it lines up with them instead of floating separately.
+      const navList = document.querySelector('nav.topbar ul.nav');
+      if (!navList) return;
+      const li = document.createElement('li');
+      li.className = 'nav-item stych-confidence-nav-item';
+      li.appendChild(buildResultsButton('stych-confidence-inline'));
+      navList.insertBefore(li, navList.firstChild);
+    } else if (isCorrectionPage()) {
+      // No equivalent button row exists on this page's header, so this
+      // stays a floating top-right button instead of an inline one.
+      document.body.appendChild(buildResultsButton('stych-confidence-floating'));
+    }
   }
 
   function processCorrectionPage() {
