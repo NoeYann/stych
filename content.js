@@ -265,6 +265,64 @@
       .filter(Boolean);
   }
 
+  // Badge injected under each numbered pastille on the recap
+  // (.box-resume-result#panel-qst-N), showing the confidence recorded for
+  // that question. Separate from processCorrectionPage()'s panel matching:
+  // the pastilles are always visible (unlike the .panel-qst detail blocks,
+  // which are CSS-hidden), so this must not be gated on new panels existing.
+  function confidenceBadgeClass(confidence) {
+    if (confidence === 1) return 'stych-confidence-badge-1';
+    if (confidence === 2) return 'stych-confidence-badge-2';
+    if (confidence === 3) return 'stych-confidence-badge-3';
+    return null;
+  }
+
+  function injectConfidenceBadges(entries, currentTestUrl, pastilles) {
+    pastilles.forEach((pastille) => {
+      // Already wrapped on a previous pass — idempotent, skip.
+      if (pastille.parentElement && pastille.parentElement.classList.contains('stych-confidence-wrap')) {
+        return;
+      }
+
+      const orderNumber = parseInt(pastille.id.replace('panel-qst-', ''), 10);
+      if (Number.isNaN(orderNumber)) return;
+
+      const entry = entries.find(
+        (e) => e.testUrl === currentTestUrl && e.questionNumber === orderNumber
+      );
+      const badgeClass = confidenceBadgeClass(entry ? entry.confidence : null);
+      if (!badgeClass) return; // no confidence recorded: no badge, no clutter.
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'stych-confidence-wrap';
+      pastille.parentNode.insertBefore(wrapper, pastille);
+      wrapper.appendChild(pastille);
+
+      const badge = document.createElement('div');
+      badge.className = 'stych-confidence-badge ' + badgeClass;
+      badge.textContent = String(entry.confidence);
+      wrapper.appendChild(badge);
+    });
+  }
+
+  function injectConfidenceBadgesIfNeeded() {
+    if (!isCorrectionPage()) return;
+
+    const pastilles = Array.from(document.querySelectorAll('.box-resume-result[id^="panel-qst-"]'));
+    if (!pastilles.length) return;
+
+    const hasUnwrapped = pastilles.some(
+      (p) => !p.parentElement || !p.parentElement.classList.contains('stych-confidence-wrap')
+    );
+    if (!hasUnwrapped) return;
+
+    chrome.storage.local.get([STORAGE_KEY], (result) => {
+      const entries = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
+      const currentTestUrl = getCurrentTestUrl(entries);
+      injectConfidenceBadges(entries, currentTestUrl, pastilles);
+    });
+  }
+
   function processCorrectionPage() {
     if (!isCorrectionPage()) return;
 
@@ -412,10 +470,12 @@
   const observer = new MutationObserver(() => {
     checkForNewQuestion();
     processCorrectionPage();
+    injectConfidenceBadgesIfNeeded();
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
   cleanupStorage();
   checkForNewQuestion();
   processCorrectionPage();
+  injectConfidenceBadgesIfNeeded();
 })();

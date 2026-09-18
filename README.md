@@ -83,6 +83,13 @@ Mode correction (confirmé sur DOM réel) :
       cliquable), pas sur le bloc détail — le bloc détail porte `panel-qst-N`
       comme **classe** (`class="panel-qst container panel-qst-N"`). Le code
       cible bien la classe, pas l'id.
+- [ ] Comportement de clic sur la pastille `.box-resume-result` (affiche
+      probablement le bloc `.panel-qst-N` correspondant) non observé
+      directement. Le badge de confiance déplace la pastille dans un
+      wrapper (`.stych-confidence-wrap`) via `insertBefore`/`appendChild`
+      sur le nœud existant — jamais de clonage — donc tout gestionnaire
+      d'événement déjà attaché à la pastille doit survivre intact. À
+      confirmer que le clic fonctionne toujours après injection du badge.
 
 Le stockage garde `matched: false` pour toute entrée qui n'a pas pu être
 recoupée avec la page de correction (examen interrompu, désynchronisation) —
