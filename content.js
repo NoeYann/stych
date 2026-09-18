@@ -325,6 +325,35 @@
     });
   }
 
+  // "Voir mes résultats" button injected directly on Stych's own pages
+  // (home page and correction recap), in addition to the popup. Uses
+  // window.open rather than chrome.tabs.create because this runs as a
+  // content script inside Stych's page, not in the extension's own
+  // privileged context — results.html must be listed in
+  // web_accessible_resources for that page to load at all from here.
+  function isHomePage() {
+    return location.pathname === '/elearning/formation-home';
+  }
+
+  function buildResultsButton() {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.id = 'stych-confidence-results-button';
+    button.className = 'stych-confidence-results-button';
+    button.textContent = 'Voir mes résultats';
+    button.addEventListener('click', () => {
+      window.open(chrome.runtime.getURL('results.html'), '_blank');
+    });
+    return button;
+  }
+
+  function injectResultsButtonIfNeeded() {
+    if (!isHomePage() && !isCorrectionPage()) return;
+    if (document.getElementById('stych-confidence-results-button')) return;
+
+    document.body.appendChild(buildResultsButton());
+  }
+
   function processCorrectionPage() {
     if (!isCorrectionPage()) return;
 
@@ -477,6 +506,7 @@
     checkForNewQuestion();
     processCorrectionPage();
     injectConfidenceBadgesIfNeeded();
+    injectResultsButtonIfNeeded();
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
@@ -484,4 +514,5 @@
   checkForNewQuestion();
   processCorrectionPage();
   injectConfidenceBadgesIfNeeded();
+  injectResultsButtonIfNeeded();
 })();

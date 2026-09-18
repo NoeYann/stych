@@ -78,3 +78,28 @@
 .stych-confidence-badge-3 {
   background: #1a6b2e;
 }
+
+/* Floating "Voir mes résultats" button, injected on the home page and the
+   correction page. Bottom-right, away from Stych's own cookie-consent
+   widget which sits bottom-left. */
+.stych-confidence-results-button {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 999999;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 999px;
+  background: #4a90d9;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: system-ui, -apple-system, sans-serif;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.stych-confidence-results-button:hover {
+  background: #3a7cc0;
+}

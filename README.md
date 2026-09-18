@@ -53,7 +53,7 @@ Une fois l'examen terminé (page de récapitulatif affichée), cliquer sur
 l'icône de l'extension → "Voir mes résultats". La page s'ouvre dans un
 nouvel onglet, lit `chrome.storage.local` et affiche l'examen le plus
 récent par défaut. Un sélecteur en haut de page (`#exam-select`) permet de
-choisir n'importe quel examen passé, libellé "Examen N — date — score" (N
+choisir n'importe quel examen passé, libellé "Examen N — score — date" (N
 = le numéro que Stych affiche lui-même comme "Examen Blanc N" sur l'accueil,
 extrait de `testUrl` — confirmé identique au `data-num_serie` de cette page
 pour les 29 examens listés, donc dérivé sans capture supplémentaire, y
@@ -64,6 +64,26 @@ correspond à au moins l'un des deux critères) : "Questions loupées"
 correction) et "Confiance faible (1-2)". Le bouton "Télécharger en CSV"
 exporte exactement les lignes actuellement
 affichées (examen + filtres sélectionnés), pas l'examen entier.
+
+Un bouton "Voir mes résultats" (même libellé que dans le popup) est aussi
+injecté directement sur la page d'accueil (`/elearning/formation-home`) et
+sur la page de correction, en position fixe bas-droite — pas seulement
+accessible via l'icône de l'extension. Ouvert via `window.open()` (un
+content script n'a pas accès à `chrome.tabs.create()`, réservé aux contextes
+privilégiés comme `popup.js`), ce qui nécessite de déclarer `results.html`
+(+ `.js`/`.css`) dans `web_accessible_resources`.
+
+**Piège rencontré sur `web_accessible_resources[].matches`** : contrairement
+à `content_scripts.matches`, ce champ **refuse** un schéma ou un hôte
+générique (`*://*/...`) — Chrome le rejette avec "Invalid match pattern"
+sans préciser lequel des deux patterns est en cause. Il exige un schéma
+concret et soit un hôte concret, soit la forme `*.domaine` (sous-domaines).
+Confirmé empiriquement (chargement réel de l'extension, pas juste une
+validation JSON) : `https://example.com/*` et `https://*.stych.fr/*`
+fonctionnent, `*://*/...`, `https://*/...` et `*://www.stych.fr/...`
+échouent tous. D'où `"matches": ["https://*.stych.fr/*"]` dans ce champ
+spécifiquement, alors que `content_scripts.matches` garde son pattern
+générique `*://*/...` habituel (jamais concerné par cette restriction).
 
 ## Points à vérifier en test réel (voir brief, section 7)
 
