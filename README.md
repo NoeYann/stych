@@ -136,3 +136,42 @@ Le stockage garde `matched: false` pour toute entrée qui n'a pas pu être
 recoupée avec la page de correction (examen interrompu, désynchronisation) —
 la page de résultats l'affiche alors avec "Non disponible" plutôt que de
 planter.
+
+## Explications et cache de photos
+
+Sur la page de résultats, une ligne dont la correction a une explication
+(`sq.explanation`, déjà capturé depuis `<p class="text-left"><b>...</b></p>`
+sur la page de correction) est cliquable : ça déplie une ligne juste en
+dessous avec le texte complet. Exportée aussi dans le CSV (colonne
+`Explication`).
+
+Pour chaque question loupée ou avec une confiance faible (1-2), la photo de
+la question (`.questionnaire_test_img`) est automatiquement récupérée et
+mise en cache à la correction, consultable dans la section "Photos à
+revoir" en bas de la page de résultats (vignette, question, examen,
+raison, taille, boutons télécharger/supprimer, "Tout vider"). Aucune
+limite automatique — c'est un cache géré à la main par toi.
+
+**Architecture** (nouvelle pièce : `background.js`, absent avant cette
+fonctionnalité) : `content.js` tourne sur l'origine `stych.fr` et peut donc
+faire un `fetch()` de l'image sans souci de CORS (même origine), mais ne
+peut pas ouvrir directement l'IndexedDB de l'extension — celle-ci vit sous
+l'origine `chrome-extension://<id>`, complètement différente. L'image
+récupérée (convertie en `ArrayBuffer`, sérialisable de façon fiable via
+`chrome.runtime.sendMessage`, contrairement à un `Blob` envoyé tel quel)
+est donc relayée au service worker d'arrière-plan (`background.js`), qui
+partage l'origine de l'extension et écrit dans IndexedDB. `results.html`
+partage cette même origine et peut donc lire/gérer directement cette même
+base — aucun message supplémentaire nécessaire pour la page de gestion.
+Déduplication naturelle par URL d'image (`keyPath: 'url'`) : la même
+question de banque revue dans un examen ultérieur écrase l'entrée existante
+plutôt que de la dupliquer.
+
+Vérifié avant de pousser : chaîne complète `content.js` (simulé) →
+`background.js` → `results.js` avec une vraie IndexedDB simulée
+(`fake-indexeddb`), y compris la déduplication, la suppression individuelle
+et le "tout vider" ; rendu réel via jsdom sur `results.html`/`results.js`
+(grille de cartes, tri par date décroissante, formatage de taille) ; et
+chargement réel de l'extension avec le nouveau service worker déclaré
+(confirmé actif via "Inspect views service worker" sur `chrome://extensions`
+en mode développeur, aucune erreur).

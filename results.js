@@ -2,6 +2,174 @@
   const STORAGE_KEY = 'stychConfidenceEntries';
   const SCORES_KEY = 'stychExamScores';
 
+  // Same database as background.js, which is the only writer (content.js
+  // can't reach it directly — see that file's comment). results.html reads
+  // and manages it directly here since it shares the chrome-extension://
+  // origin with the background script.
+  const IMAGE_DB_NAME = 'stychImageCache';
+  const IMAGE_DB_VERSION = 1;
+  const IMAGE_STORE_NAME = 'images';
+
+  function openImageDb() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(IMAGE_DB_NAME, IMAGE_DB_VERSION);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IMAGE_STORE_NAME)) {
+          db.createObjectStore(IMAGE_STORE_NAME, { keyPath: 'url' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function getAllCachedImages() {
+    return openImageDb().then(
+      (db) =>
+        new Promise((resolve, reject) => {
+          const tx = db.transaction(IMAGE_STORE_NAME, 'readonly');
+          const req = tx.objectStore(IMAGE_STORE_NAME).getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => reject(req.error);
+        })
+    );
+  }
+
+  function deleteCachedImage(url) {
+    return openImageDb().then(
+      (db) =>
+        new Promise((resolve, reject) => {
+          const tx = db.transaction(IMAGE_STORE_NAME, 'readwrite');
+          tx.objectStore(IMAGE_STORE_NAME).delete(url);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        })
+    );
+  }
+
+  function clearCachedImages() {
+    return openImageDb().then(
+      (db) =>
+        new Promise((resolve, reject) => {
+          const tx = db.transaction(IMAGE_STORE_NAME, 'readwrite');
+          tx.objectStore(IMAGE_STORE_NAME).clear();
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        })
+    );
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return `${bytes} o`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
+    return `${(bytes / (1024 * 1024)).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Mo`;
+  }
+
+  function imageReasonLabel(reason) {
+    if (reason === 'wrong') return 'Faux';
+    if (reason === 'lowConfidence') return 'Confiance faible';
+    if (reason === 'both') return 'Faux + confiance faible';
+    return '';
+  }
+
+  function renderImageCache(records) {
+    const grid = document.getElementById('image-cache-grid');
+    const emptyEl = document.getElementById('image-cache-empty');
+    const sizeEl = document.getElementById('image-cache-size');
+
+    grid.innerHTML = '';
+
+    const totalSize = records.reduce((sum, r) => sum + (r.size || 0), 0);
+    sizeEl.textContent = records.length
+      ? `${records.length} photo${records.length > 1 ? 's' : ''} — ${formatBytes(totalSize)}`
+      : '—';
+
+    grid.hidden = records.length === 0;
+    emptyEl.hidden = records.length !== 0;
+
+    records
+      .slice()
+      .sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''))
+      .forEach((record) => {
+        const card = document.createElement('div');
+        card.className = 'image-card';
+
+        const objectUrl = URL.createObjectURL(record.blob);
+
+        const thumb = document.createElement('img');
+        thumb.className = 'image-card-thumb';
+        thumb.src = objectUrl;
+        thumb.alt = record.questionText || 'Photo de question';
+        card.appendChild(thumb);
+
+        const info = document.createElement('div');
+        info.className = 'image-card-info';
+
+        const questionP = document.createElement('p');
+        questionP.className = 'image-card-question';
+        questionP.textContent = record.questionText || '(question non identifiée)';
+        info.appendChild(questionP);
+
+        const examNumber = getExamNumber(record.testUrl);
+        const metaP = document.createElement('p');
+        metaP.className = 'image-card-meta';
+        const examSpan = document.createTextNode(
+          `${examNumber ? `Examen ${examNumber}` : 'Examen ?'} · Q${record.questionOrderNumber ?? '?'} · `
+        );
+        metaP.appendChild(examSpan);
+        const reasonSpan = document.createElement('span');
+        reasonSpan.className = `image-card-reason reason-${record.reason}`;
+        reasonSpan.textContent = imageReasonLabel(record.reason);
+        metaP.appendChild(reasonSpan);
+        info.appendChild(metaP);
+
+        const sizeP = document.createElement('p');
+        sizeP.className = 'image-card-size';
+        sizeP.textContent = formatBytes(record.size || 0);
+        info.appendChild(sizeP);
+
+        card.appendChild(info);
+
+        const actions = document.createElement('div');
+        actions.className = 'image-card-actions';
+
+        const downloadBtn = document.createElement('button');
+        downloadBtn.type = 'button';
+        downloadBtn.textContent = 'Télécharger';
+        downloadBtn.addEventListener('click', () => {
+          const a = document.createElement('a');
+          a.href = objectUrl;
+          const extension = (record.mimeType || '').includes('png') ? 'png' : 'jpg';
+          a.download = `stych-question-${record.questionOrderNumber ?? 'x'}.${extension}`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        });
+        actions.appendChild(downloadBtn);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'image-card-delete';
+        deleteBtn.textContent = 'Supprimer';
+        deleteBtn.addEventListener('click', () => {
+          deleteCachedImage(record.url).then(() => loadImageCache());
+        });
+        actions.appendChild(deleteBtn);
+
+        card.appendChild(actions);
+        grid.appendChild(card);
+      });
+  }
+
+  function loadImageCache() {
+    getAllCachedImages()
+      .then(renderImageCache)
+      .catch((err) => {
+        console.error('[Stych Suivi] failed to read image cache', err);
+      });
+  }
+
   // The number Stych itself shows as "Examen Blanc N" is identical to the
   // testN segment of testUrl (confirmed across all 29 exams listed on the
   // home page, e.g. test7 <-> "Examen Blanc 7", also matching that page's
@@ -72,6 +240,7 @@
             isCorrect: sq.isCorrect,
             confidence: entry.confidence,
             available: true,
+            explanation: sq.explanation || null,
           });
         });
       } else {
@@ -141,6 +310,8 @@
 
     rows.forEach((row) => {
       const tr = document.createElement('tr');
+      const hasExplanation = !!row.explanation;
+      if (hasExplanation) tr.classList.add('has-explanation');
 
       const numberTd = document.createElement('td');
       numberTd.textContent = row.orderNumber ?? '—';
@@ -153,7 +324,14 @@
       tr.appendChild(confidenceTd);
 
       const questionTd = document.createElement('td');
-      questionTd.textContent = row.text;
+      if (hasExplanation) {
+        const toggleIcon = document.createElement('span');
+        toggleIcon.className = 'row-toggle-icon';
+        toggleIcon.textContent = '▸';
+        toggleIcon.setAttribute('aria-hidden', 'true');
+        questionTd.appendChild(toggleIcon);
+      }
+      questionTd.appendChild(document.createTextNode(row.text));
       tr.appendChild(questionTd);
 
       const answerTd = document.createElement('td');
@@ -168,6 +346,23 @@
       tr.appendChild(correctTd);
 
       tbody.appendChild(tr);
+
+      if (hasExplanation) {
+        const explanationRow = document.createElement('tr');
+        explanationRow.className = 'explanation-row';
+        explanationRow.hidden = true;
+        const explanationTd = document.createElement('td');
+        explanationTd.colSpan = 5;
+        explanationTd.className = 'explanation-cell';
+        explanationTd.textContent = row.explanation;
+        explanationRow.appendChild(explanationTd);
+        tbody.appendChild(explanationRow);
+
+        tr.addEventListener('click', () => {
+          explanationRow.hidden = !explanationRow.hidden;
+          tr.classList.toggle('is-expanded', !explanationRow.hidden);
+        });
+      }
     });
 
     document.getElementById('results-table').style.display = rows.length ? '' : 'none';
@@ -187,7 +382,7 @@
   }
 
   function toCsv(rows) {
-    const header = ['N', 'Confiance', 'Question', 'Ta reponse', 'Bonne reponse', 'Resultat'];
+    const header = ['N', 'Confiance', 'Question', 'Ta reponse', 'Bonne reponse', 'Resultat', 'Explication'];
     const lines = [header.join(';')];
 
     rows.forEach((row) => {
@@ -199,6 +394,7 @@
         row.selectedLabel,
         row.correctLabel,
         resultText,
+        row.explanation || '',
       ];
       lines.push(cells.map(csvEscape).join(';'));
     });
@@ -233,6 +429,12 @@
   }
 
   function init() {
+    loadImageCache();
+    document.getElementById('clear-images').addEventListener('click', () => {
+      if (!window.confirm('Supprimer toutes les photos enregistrées ?')) return;
+      clearCachedImages().then(() => loadImageCache());
+    });
+
     chrome.storage.local.get([STORAGE_KEY, SCORES_KEY], (result) => {
       const allEntries = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
       const scores = result[SCORES_KEY] && typeof result[SCORES_KEY] === 'object' ? result[SCORES_KEY] : {};

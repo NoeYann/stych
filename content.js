@@ -262,9 +262,47 @@
         if (!numClass) return null;
         const orderNumber = parseInt(numClass.replace('panel-qst-', ''), 10);
         const subQuestions = Array.from(panelEl.querySelectorAll('.qst_box')).map(parseSubQuestion);
-        return { orderNumber, subQuestions };
+        const imgEl = panelEl.querySelector('.questionnaire_test_img');
+        const imageUrl = imgEl ? imgEl.getAttribute('src') : null;
+        return { orderNumber, subQuestions, imageUrl };
       })
       .filter(Boolean);
+  }
+
+  // --- Question image cache (wrong or low-confidence questions only) ---
+  //
+  // content.js runs on stych.fr's own origin, so it can fetch the image
+  // (same-origin, no CORS issue) but can't open the extension's own
+  // IndexedDB directly — that lives under chrome-extension://<id>, a
+  // different origin. The fetched bytes are relayed to background.js
+  // (which does share that origin) via runtime messaging instead.
+
+  function imageCacheReason(entry) {
+    const wrong = entry.isCorrect === false;
+    const lowConfidence = entry.confidence === 1 || entry.confidence === 2;
+    if (wrong && lowConfidence) return 'both';
+    if (wrong) return 'wrong';
+    if (lowConfidence) return 'lowConfidence';
+    return null;
+  }
+
+  async function cacheQuestionImage(imageUrl, meta) {
+    try {
+      const absoluteUrl = new URL(imageUrl, location.href).href;
+      const response = await fetch(absoluteUrl);
+      if (!response.ok) return;
+      const blob = await response.blob();
+      const buffer = await blob.arrayBuffer();
+      chrome.runtime.sendMessage({
+        type: 'stych-cache-image',
+        url: imageUrl,
+        mimeType: blob.type || 'image/jpeg',
+        buffer,
+        meta,
+      });
+    } catch (err) {
+      console.error('[Stych Suivi] image cache fetch failed', err);
+    }
   }
 
   // Badge injected under each numbered pastille on the recap
@@ -439,6 +477,16 @@
                 isCorrect: sq.isCorrect,
                 explanation: sq.explanation,
               }));
+
+              const reason = imageCacheReason(entry);
+              if (reason && panel.imageUrl) {
+                cacheQuestionImage(panel.imageUrl, {
+                  testUrl: currentTestUrl,
+                  questionOrderNumber: panel.orderNumber,
+                  questionText: panel.subQuestions.map((sq) => sq.text).join(' / '),
+                  reason,
+                });
+              }
 
               changed = true;
             });

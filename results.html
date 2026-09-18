@@ -43,6 +43,18 @@
     <p id="empty-state" class="empty-state">
       Aucun résultat trouvé. Termine un examen blanc puis reviens sur cette page.
     </p>
+
+    <section id="image-cache-section">
+      <div class="image-cache-header">
+        <h2>Photos à revoir</h2>
+        <span id="image-cache-size" class="image-cache-size">—</span>
+        <button id="clear-images" type="button" class="clear-images-btn">Tout vider</button>
+      </div>
+      <div id="image-cache-grid" class="image-cache-grid" hidden></div>
+      <p id="image-cache-empty" class="empty-state">
+        Aucune photo enregistrée pour l'instant. Les photos des questions loupées ou avec une confiance faible (1-2) s'ajoutent ici automatiquement après correction.
+      </p>
+    </section>
   </main>
   <script src="results.js"></script>
 </body>
