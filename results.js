@@ -196,11 +196,15 @@
     URL.revokeObjectURL(url);
   }
 
+  // Filters combine with OR when more than one is active: checking both
+  // shows a row that matches EITHER condition (missed, or low confidence),
+  // not just rows that satisfy both at once.
   function applyRowFilters(rows, filters) {
+    if (!filters.missedOnly && !filters.lowConfidenceOnly) return rows;
     return rows.filter((row) => {
-      if (filters.missedOnly && !(row.available && row.isCorrect === false)) return false;
-      if (filters.lowConfidenceOnly && !(row.confidence === 1 || row.confidence === 2)) return false;
-      return true;
+      const isMissed = filters.missedOnly && row.available && row.isCorrect === false;
+      const isLowConfidence = filters.lowConfidenceOnly && (row.confidence === 1 || row.confidence === 2);
+      return isMissed || isLowConfidence;
     });
   }
 
