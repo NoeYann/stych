@@ -362,7 +362,18 @@
         new Promise((resolve) => {
           chrome.storage.local.get([STORAGE_KEY], (result) => {
             const entries = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
-            const filtered = entries.filter((e) => e.id_qst !== entry.id_qst);
+            // id_qst identifies the exam attempt server-side, not the
+            // question — it's identical across every question of one exam
+            // (confirmed: the same id_qst was captured at question 6/40 and
+            // at question 40/40 of the same attempt). Deduping on it alone
+            // made every new save delete the previous question's entry,
+            // leaving only the last question's capture per exam. The
+            // question's real identity within an exam is (testUrl,
+            // questionNumber) — already the key used for correction
+            // matching in processCorrectionPage().
+            const filtered = entries.filter(
+              (e) => !(e.testUrl === entry.testUrl && e.questionNumber === entry.questionNumber)
+            );
             filtered.push(entry);
             chrome.storage.local.set({ [STORAGE_KEY]: filtered }, resolve);
           });

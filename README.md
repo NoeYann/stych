@@ -61,6 +61,13 @@ Mode question :
       par une ré-injection défensive du widget dans `content.js`)
 - [ ] Valeur exacte de `.questionnaire_test_multiple` pour un QCM à choix
       unique (actuellement seul "Plusieurs réponses" est documenté)
+- [x] `id_qst` (champ caché `#id_qst`) identifie la **tentative d'examen**
+      côté serveur, pas la question — confirmé : la même valeur d'`id_qst`
+      a été capturée à la question 6/40 et à la question 40/40 d'un même
+      examen. Ne jamais l'utiliser comme clé d'unicité par question ; la clé
+      d'identité d'une question au sein d'un examen est `(testUrl,
+      questionNumber)`, utilisée à la fois pour la dédup dans `saveEntry()`
+      et pour le matching dans `processCorrectionPage()`.
 
 Mode correction (confirmé sur DOM réel) :
 - [x] Classe pour une réponse juste sélectionnée : `selected goodAnswer`
