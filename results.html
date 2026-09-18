@@ -8,9 +8,15 @@
 <body>
   <header>
     <h1>Mes résultats</h1>
-    <select id="exam-select"></select>
+    <div class="exam-picker" id="exam-picker">
+      <button type="button" id="exam-picker-toggle" class="exam-picker-toggle" aria-haspopup="listbox" aria-expanded="false">
+        <span class="exam-picker-toggle-text">—</span>
+        <span class="exam-picker-caret" aria-hidden="true">▾</span>
+      </button>
+      <ul id="exam-picker-list" class="exam-picker-list" role="listbox" hidden></ul>
+    </div>
     <div id="score" class="score">—</div>
-    <div id="avg-confidence" class="score">—</div>
+    <div id="avg-confidence" class="avg-confidence-stat">—</div>
     <label class="filter-toggle">
       <input type="checkbox" id="filter-missed">
       Questions loupées

@@ -32,13 +32,110 @@ h1 {
   border: 1px solid #ddd;
 }
 
-select#exam-select {
-  padding: 8px 12px;
-  border-radius: 6px;
+.avg-confidence-stat {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #ddd;
+  color: #1a1a1a;
+}
+
+/* Custom exam picker (button + list), replacing a native <select> so each
+   row can mix font sizes by importance — not possible inside a single
+   native <option>. */
+.exam-picker {
+  position: relative;
+  min-width: 360px;
+}
+
+.exam-picker-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
   border: 1px solid #ddd;
   background: #fff;
   font-size: 14px;
-  max-width: 280px;
+  color: #1a1a1a;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.exam-picker-toggle:hover {
+  border-color: #4a90d9;
+  background: #f5f9ff;
+}
+
+.exam-picker-toggle-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exam-picker-caret {
+  color: #999;
+  font-size: 12px;
+  flex: none;
+}
+
+.exam-picker-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.exam-picker-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.exam-picker-item:hover {
+  background: #f0f6ff;
+}
+
+.exam-picker-item.is-selected {
+  background: #eaf2fc;
+}
+
+.exam-picker-number {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.exam-picker-score {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a4a4a;
+}
+
+.exam-picker-date {
+  font-size: 12px;
+  color: #888;
+  margin-left: auto;
+  flex: none;
 }
 
 .filter-toggle {
@@ -49,6 +146,15 @@ select#exam-select {
   color: #333;
   cursor: pointer;
   user-select: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.filter-toggle:hover {
+  background: #f5f9ff;
+  border-color: #cfe0f5;
 }
 
 .filter-toggle input {

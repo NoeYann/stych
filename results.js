@@ -238,7 +238,10 @@
       const scores = result[SCORES_KEY] && typeof result[SCORES_KEY] === 'object' ? result[SCORES_KEY] : {};
       const examGroups = getExamGroups(allEntries, scores);
 
-      const examSelect = document.getElementById('exam-select');
+      const examPicker = document.getElementById('exam-picker');
+      const examPickerToggle = document.getElementById('exam-picker-toggle');
+      const examPickerToggleText = examPickerToggle.querySelector('.exam-picker-toggle-text');
+      const examPickerList = document.getElementById('exam-picker-list');
       const scoreEl = document.getElementById('score');
       const avgConfidenceEl = document.getElementById('avg-confidence');
       const missedCheckbox = document.getElementById('filter-missed');
@@ -248,27 +251,35 @@
         renderTable([], 'Aucun résultat trouvé. Termine un examen blanc puis reviens sur cette page.');
         scoreEl.textContent = 'Pas encore de résultat';
         avgConfidenceEl.textContent = 'Pas encore de résultat';
-        examSelect.style.display = 'none';
+        examPicker.style.display = 'none';
         document.getElementById('download-csv').style.display = 'none';
         return;
       }
 
-      examGroups.forEach((group, index) => {
-        const option = document.createElement('option');
-        option.value = String(index);
+      function examOptionParts(group) {
         const scoreLabel = group.scoreInfo
           ? `${group.scoreInfo.score} / ${group.scoreInfo.total}`
           : 'non terminé';
         const examNumber = getExamNumber(group.testUrl);
         const examLabel = examNumber ? `Examen ${examNumber}` : 'Examen ?';
-        option.textContent = `${examLabel} — ${scoreLabel} — ${formatDate(group.timestamp)}`;
-        examSelect.appendChild(option);
-      });
+        return { examLabel, scoreLabel, dateLabel: formatDate(group.timestamp) };
+      }
 
+      function closeExamPicker() {
+        examPickerList.hidden = true;
+        examPickerToggle.setAttribute('aria-expanded', 'false');
+      }
+
+      function openExamPicker() {
+        examPickerList.hidden = false;
+        examPickerToggle.setAttribute('aria-expanded', 'true');
+      }
+
+      let selectedExamIndex = 0;
       let visibleRows = [];
 
       function render() {
-        const group = examGroups[Number(examSelect.value)];
+        const group = examGroups[selectedExamIndex];
         const allRows = buildRows(group.entries);
         const filters = {
           missedOnly: missedCheckbox.checked,
@@ -288,12 +299,61 @@
             : `Confiance : ${avgConfidence.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / 3`;
       }
 
-      examSelect.addEventListener('change', render);
+      function selectExam(index) {
+        selectedExamIndex = index;
+        const { examLabel, scoreLabel } = examOptionParts(examGroups[index]);
+        examPickerToggleText.textContent = `${examLabel} — ${scoreLabel}`;
+        Array.from(examPickerList.children).forEach((li, i) => {
+          li.classList.toggle('is-selected', i === index);
+          li.setAttribute('aria-selected', i === index ? 'true' : 'false');
+        });
+        closeExamPicker();
+        render();
+      }
+
+      examGroups.forEach((group, index) => {
+        const { examLabel, scoreLabel, dateLabel } = examOptionParts(group);
+
+        const li = document.createElement('li');
+        li.className = 'exam-picker-item';
+        li.setAttribute('role', 'option');
+        li.setAttribute('aria-selected', 'false');
+
+        const numberSpan = document.createElement('span');
+        numberSpan.className = 'exam-picker-number';
+        numberSpan.textContent = examLabel;
+
+        const scoreSpan = document.createElement('span');
+        scoreSpan.className = 'exam-picker-score';
+        scoreSpan.textContent = scoreLabel;
+
+        const dateSpan = document.createElement('span');
+        dateSpan.className = 'exam-picker-date';
+        dateSpan.textContent = dateLabel;
+
+        li.append(numberSpan, scoreSpan, dateSpan);
+        li.addEventListener('click', () => selectExam(index));
+        examPickerList.appendChild(li);
+      });
+
+      examPickerToggle.addEventListener('click', () => {
+        if (examPickerList.hidden) openExamPicker();
+        else closeExamPicker();
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!examPicker.contains(e.target)) closeExamPicker();
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeExamPicker();
+      });
+
       missedCheckbox.addEventListener('change', render);
       lowConfidenceCheckbox.addEventListener('change', render);
       document.getElementById('download-csv').addEventListener('click', () => downloadCsv(visibleRows));
 
-      render();
+      selectExam(0);
     });
   }
 
