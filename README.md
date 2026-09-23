@@ -52,18 +52,28 @@ chrome.storage.local.get('stychConfidenceEntries', console.log);
 Une fois l'examen terminé (page de récapitulatif affichée), cliquer sur
 l'icône de l'extension → "Voir mes résultats". La page s'ouvre dans un
 nouvel onglet, lit `chrome.storage.local` et affiche l'examen le plus
-récent par défaut. Un sélecteur en haut de page (`#exam-select`) permet de
-choisir n'importe quel examen passé, libellé "Examen N — score — date" (N
-= le numéro que Stych affiche lui-même comme "Examen Blanc N" sur l'accueil,
-extrait de `testUrl` — confirmé identique au `data-num_serie` de cette page
-pour les 29 examens listés, donc dérivé sans capture supplémentaire, y
-compris pour les examens déjà enregistrés avant ce changement). Deux
-filtres, combinables en **OU** (cocher les deux affiche une question qui
-correspond à au moins l'un des deux critères) : "Questions loupées"
+récent par défaut. Un sélecteur en haut de page (`#exam-picker`) permet de
+choisir **un ou plusieurs** examens passés, chacun libellé "Examen N —
+score — date" (N = le numéro que Stych affiche lui-même comme "Examen
+Blanc N" sur l'accueil, extrait de `testUrl` — confirmé identique au
+`data-num_serie` de cette page pour les 29 examens listés, donc dérivé sans
+capture supplémentaire, y compris pour les examens déjà enregistrés avant
+ce changement). Une case "Tous les examens" épinglée en haut du menu coche
+ou décoche tout d'un coup. Quand plusieurs examens sont sélectionnés, le
+tableau les affiche tous ensemble, groupés par examen (le plus récent en
+premier, comme dans le menu) et non triés par numéro de question à travers
+les examens — un même N° de question dans deux examens différents n'est
+pas forcément la même question. Une colonne "Examen" apparaît alors dans le
+tableau (masquée quand un seul examen est affiché, pour ne pas répéter la
+même valeur sur chaque ligne) ; le score affiché devient la somme des
+scores des examens sélectionnés, avec un suffixe "(N examens)". Le CSV
+inclut toujours cette colonne "Examen", que le tableau la montre ou non.
+Deux filtres, combinables en **OU** (cocher les deux affiche une question
+qui correspond à au moins l'un des deux critères) : "Questions loupées"
 (réponse effectivement fausse, exclut les questions non recoupées avec une
 correction) et "Confiance faible (1-2)". Le bouton "Télécharger en CSV"
 exporte exactement les lignes actuellement
-affichées (examen + filtres sélectionnés), pas l'examen entier.
+affichées (examens + filtres sélectionnés), pas l'examen entier.
 
 Un bouton "Voir mes résultats" (même libellé que dans le popup, tooltip
 "Stych Suivi" au survol) est aussi injecté directement sur Stych, sans
@@ -265,3 +275,55 @@ classe `is-correction` sur une ligne juste, icône ✗ + classe `is-correction`
 sur une ligne fausse, alternance `row-stripe` correcte sur l'index des
 lignes réellement affichées (pas des lignes DOM brutes), texte accessible
 `.sr-only` présent.
+
+## Sélection multi-examens dans le tableau
+
+Historique du code vérifié avant d'implémenter : le sélecteur d'examen n'a
+jamais permis d'afficher plusieurs examens à la fois depuis sa toute
+première version (`badb842`, v0.3.0) — c'était un choix unique dès le
+départ, jamais une régression. Remis en place comme une vraie fonctionnalité
+multi-sélection, à la demande explicite de l'utilisateur.
+
+`#exam-picker` gère désormais un `Set` d'indices sélectionnés
+(`selectedIndices`) au lieu d'un seul index. Chaque ligne du menu est un
+`<label>` enveloppant une checkbox (dans un `<li>`, pour garder un `<ul>`
+valide) — cliquer n'importe où sur la ligne, pas juste sur la case, la
+coche/décoche nativement, sans JS supplémentaire pour ça. Une ligne "Tous
+les examens" épinglée en haut du menu (checkbox avec état `indeterminate`
+quand une sélection partielle est en cours) coche/décoche tout d'un coup.
+Le menu ne se ferme plus à chaque clic (comportement single-select
+précédent) — seul un clic à l'extérieur ou Echap le referme, pour permettre
+de cocher plusieurs examens à la suite.
+
+`render()` combine les lignes de tous les groupes sélectionnés
+(`examGroups.filter(...).flatMap(buildRows)`) sans re-trier par numéro de
+question à travers les examens — chaque groupe reste trié en interne par
+numéro (comme avant), et les groupes eux-mêmes gardent l'ordre du menu
+(plus récent en premier). Trier par numéro de question à travers plusieurs
+examens aurait mélangé des questions sans rapport qui partagent juste la
+même position dans des examens différents.
+
+`buildRows()` attache désormais `examNumber` (déjà dérivé via
+`getExamNumber(entry.testUrl)`) à chaque ligne, systématiquement — que la
+colonne "Examen" soit affichée ou non à l'écran. `renderTable()` reconstruit
+entièrement la ligne d'en-tête (`#results-head-row`, vidée et repeuplée à
+chaque rendu) plutôt que de basculer la visibilité d'une colonne fixe en
+CSS : le `colSpan` de la ligne d'explication dépliée doit toujours
+correspondre au nombre de colonnes réellement présentes, ce qui aurait été
+fragile à synchroniser avec un `display:none` CSS sur une colonne qui
+resterait dans le DOM.
+
+Le score agrège les examens sélectionnés (somme des scores/totaux,
+suffixe "(N examens)" si plus d'un) ; la moyenne de confiance continue de
+fonctionner sans changement, car `computeAverageConfidence()` opère déjà
+sur la liste de lignes affichées, pas sur les entrées brutes par examen
+(prévu forward-compatible dès son écriture initiale).
+
+Vérifié via jsdom + `fake-indexeddb`, avec trois examens synthétiques
+(2 questions chacun) : sélection par défaut = seulement le plus récent
+(comportement identique à avant) ; case "Tous les examens" cochée →
+6 lignes groupées par examen dans le bon ordre (`7,7,5,5,3,3`, pas
+interleaved par numéro de question), colonne "Examen" apparaît, score
+agrégé correct avec suffixe ; décocher un examen → repasse à "N examens
+sélectionnés" et la case "Tous" devient `indeterminate` ; tout décocher →
+tableau vide avec message dédié et score "Pas encore de résultat".

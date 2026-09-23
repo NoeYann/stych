@@ -145,6 +145,21 @@ h1 {
   background: #eaf2fc;
 }
 
+.exam-picker-item input[type="checkbox"] {
+  flex: none;
+  cursor: pointer;
+}
+
+/* "Tous les examens" toggle, pinned above the per-exam rows with a
+   separator so it reads as a distinct bulk action, not just another exam. */
+.exam-picker-select-all {
+  font-weight: 700;
+  border-bottom: 1px solid #eee;
+  border-radius: 6px 6px 0 0;
+  margin-bottom: 4px;
+  padding-bottom: 10px;
+}
+
 .exam-picker-number {
   font-size: 15px;
   font-weight: 700;

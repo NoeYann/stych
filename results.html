@@ -13,7 +13,7 @@
         <span class="exam-picker-toggle-text">—</span>
         <span class="exam-picker-caret" aria-hidden="true">▾</span>
       </button>
-      <ul id="exam-picker-list" class="exam-picker-list" role="listbox" hidden></ul>
+      <ul id="exam-picker-list" class="exam-picker-list" role="listbox" aria-multiselectable="true" hidden></ul>
     </div>
     <div id="score" class="score">—</div>
     <div id="avg-confidence" class="avg-confidence-stat">—</div>
@@ -34,13 +34,7 @@
   <main>
     <table id="results-table">
       <thead>
-        <tr>
-          <th>N°</th>
-          <th>Confiance</th>
-          <th>Question</th>
-          <th>Ta réponse</th>
-          <th>Bonne réponse</th>
-        </tr>
+        <tr id="results-head-row"></tr>
       </thead>
       <tbody id="results-body"></tbody>
     </table>

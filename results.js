@@ -242,11 +242,17 @@
     const images = imagesByKey || new Map();
 
     entries.forEach((entry) => {
+      // Attached to every row (not just when a multi-exam column is shown)
+      // so buildRows never needs to know whether the caller will display
+      // it — the exam column's own visibility is decided by the caller.
+      const examNumber = getExamNumber(entry.testUrl);
+
       if (entry.matched && Array.isArray(entry.subQuestions) && entry.subQuestions.length) {
         const imageRecord = images.get(`${entry.testUrl}::${entry.questionOrderNumber}`) || null;
         entry.subQuestions.forEach((sq) => {
           rows.push({
             orderNumber: entry.questionOrderNumber ?? entry.questionNumber ?? null,
+            examNumber,
             text: sq.text || '(question non identifiée)',
             selectedLabel:
               Array.isArray(sq.selectedAnswerLabels) && sq.selectedAnswerLabels.length
@@ -271,6 +277,7 @@
         texts.forEach((text) => {
           rows.push({
             orderNumber: entry.questionNumber ?? null,
+            examNumber,
             text,
             selectedLabel:
               Array.isArray(entry.selectedAnswerIds) && entry.selectedAnswerIds.length
@@ -324,7 +331,23 @@
     return null;
   }
 
-  function renderTable(rows, emptyMessage) {
+  // The exam column only appears when the table is showing more than one
+  // exam at once — for a single exam it would just repeat the same value
+  // on every row. The header row is rebuilt from scratch on every render
+  // rather than toggling a column's visibility in CSS, so the explanation
+  // row's colSpan always matches however many columns actually exist.
+  function renderTable(rows, emptyMessage, showExamColumn) {
+    const headRow = document.getElementById('results-head-row');
+    headRow.innerHTML = '';
+    const headers = showExamColumn
+      ? ['N°', 'Examen', 'Confiance', 'Question', 'Ta réponse', 'Bonne réponse']
+      : ['N°', 'Confiance', 'Question', 'Ta réponse', 'Bonne réponse'];
+    headers.forEach((label) => {
+      const th = document.createElement('th');
+      th.textContent = label;
+      headRow.appendChild(th);
+    });
+
     const tbody = document.getElementById('results-body');
     tbody.innerHTML = '';
 
@@ -339,6 +362,12 @@
       const numberTd = document.createElement('td');
       numberTd.textContent = row.orderNumber ?? '—';
       tr.appendChild(numberTd);
+
+      if (showExamColumn) {
+        const examTd = document.createElement('td');
+        examTd.textContent = row.examNumber ?? '?';
+        tr.appendChild(examTd);
+      }
 
       const confidenceTd = document.createElement('td');
       confidenceTd.textContent = confidenceText(row.confidence);
@@ -388,7 +417,7 @@
         explanationRow.className = 'explanation-row';
         explanationRow.hidden = true;
         const explanationTd = document.createElement('td');
-        explanationTd.colSpan = 5;
+        explanationTd.colSpan = headers.length;
         explanationTd.className = 'explanation-cell';
 
         if (hasExplanation) {
@@ -438,13 +467,14 @@
   }
 
   function toCsv(rows) {
-    const header = ['N', 'Confiance', 'Question', 'Ta reponse', 'Bonne reponse', 'Resultat', 'Explication'];
+    const header = ['N', 'Examen', 'Confiance', 'Question', 'Ta reponse', 'Bonne reponse', 'Resultat', 'Explication'];
     const lines = [header.join(';')];
 
     rows.forEach((row) => {
       const resultText = row.available ? (row.isCorrect ? 'Juste' : 'Faux') : 'Non disponible';
       const cells = [
         row.orderNumber ?? '',
+        row.examNumber ?? '',
         confidenceText(row.confidence),
         row.text,
         row.selectedLabel,
@@ -543,22 +573,69 @@
         examPickerToggle.setAttribute('aria-expanded', 'true');
       }
 
-      let selectedExamIndex = 0;
+      // Multi-select: any number of exams can be shown at once, combined
+      // in the same table (grouped by exam, newest first, matching the
+      // picker's own order — not re-sorted by question number across
+      // exams, since the same order number in two different exams isn't
+      // the same question). Defaults to just the most recent exam, which
+      // keeps the original single-exam behavior for anyone who never opens
+      // the picker.
+      const selectedIndices = new Set();
       let visibleRows = [];
 
+      function updateToggleLabel() {
+        const count = selectedIndices.size;
+        if (count === 0) {
+          examPickerToggleText.textContent = 'Aucun examen sélectionné';
+        } else if (count === 1) {
+          const index = selectedIndices.values().next().value;
+          const { examLabel, scoreLabel } = examOptionParts(examGroups[index]);
+          examPickerToggleText.textContent = `${examLabel} — ${scoreLabel}`;
+        } else if (count === examGroups.length) {
+          examPickerToggleText.textContent = `Tous les examens (${count})`;
+        } else {
+          examPickerToggleText.textContent = `${count} examens sélectionnés`;
+        }
+      }
+
+      function updatePickerSelectionUI() {
+        Array.from(examPickerList.querySelectorAll('.exam-picker-item[data-index]')).forEach((label) => {
+          const index = Number(label.dataset.index);
+          const checked = selectedIndices.has(index);
+          label.classList.toggle('is-selected', checked);
+          const checkbox = label.querySelector('input[type="checkbox"]');
+          if (checkbox) checkbox.checked = checked;
+        });
+
+        const allSelected = selectedIndices.size === examGroups.length;
+        selectAllCheckbox.checked = allSelected;
+        selectAllCheckbox.indeterminate = selectedIndices.size > 0 && !allSelected;
+        selectAllLabel.classList.toggle('is-selected', allSelected);
+      }
+
       function render() {
-        const group = examGroups[selectedExamIndex];
-        const allRows = buildRows(group.entries, imagesByKey);
+        const selectedGroups = examGroups.filter((_, index) => selectedIndices.has(index));
+        const allRows = selectedGroups.flatMap((group) => buildRows(group.entries, imagesByKey));
         const filters = {
           missedOnly: missedCheckbox.checked,
           lowConfidenceOnly: lowConfidenceCheckbox.checked,
         };
         visibleRows = applyRowFilters(allRows, filters);
 
-        renderTable(visibleRows, 'Aucune question ne correspond aux filtres sélectionnés.');
-        scoreEl.textContent = group.scoreInfo
-          ? `${group.scoreInfo.score} / ${group.scoreInfo.total}`
-          : 'Pas encore de résultat';
+        const emptyMessage = selectedGroups.length
+          ? 'Aucune question ne correspond aux filtres sélectionnés.'
+          : 'Sélectionne au moins un examen dans le menu ci-dessus.';
+        renderTable(visibleRows, emptyMessage, selectedIndices.size !== 1);
+
+        const scoredGroups = selectedGroups.filter((group) => group.scoreInfo);
+        if (!scoredGroups.length) {
+          scoreEl.textContent = 'Pas encore de résultat';
+        } else {
+          const score = scoredGroups.reduce((sum, group) => sum + group.scoreInfo.score, 0);
+          const total = scoredGroups.reduce((sum, group) => sum + group.scoreInfo.total, 0);
+          const suffix = selectedGroups.length > 1 ? ` (${selectedGroups.length} examens)` : '';
+          scoreEl.textContent = `${score} / ${total}${suffix}`;
+        }
 
         const avgConfidence = computeAverageConfidence(visibleRows);
         avgConfidenceEl.textContent =
@@ -567,25 +644,41 @@
             : `Confiance : ${avgConfidence.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / 3`;
       }
 
-      function selectExam(index) {
-        selectedExamIndex = index;
-        const { examLabel, scoreLabel } = examOptionParts(examGroups[index]);
-        examPickerToggleText.textContent = `${examLabel} — ${scoreLabel}`;
-        Array.from(examPickerList.children).forEach((li, i) => {
-          li.classList.toggle('is-selected', i === index);
-          li.setAttribute('aria-selected', i === index ? 'true' : 'false');
-        });
-        closeExamPicker();
+      // "Tous les examens" toggle, pinned above the per-exam rows. The
+      // <label> wraps its checkbox so a click anywhere on the row (not
+      // just the tiny checkbox) toggles it, natively, with no extra JS —
+      // it's nested in an <li> to keep the <ul> a valid list.
+      const selectAllItem = document.createElement('li');
+      const selectAllLabel = document.createElement('label');
+      selectAllLabel.className = 'exam-picker-item exam-picker-select-all';
+      const selectAllCheckbox = document.createElement('input');
+      selectAllCheckbox.type = 'checkbox';
+      const selectAllText = document.createElement('span');
+      selectAllText.textContent = 'Tous les examens';
+      selectAllLabel.append(selectAllCheckbox, selectAllText);
+      selectAllItem.appendChild(selectAllLabel);
+      selectAllCheckbox.addEventListener('change', () => {
+        if (selectAllCheckbox.checked) {
+          examGroups.forEach((_, index) => selectedIndices.add(index));
+        } else {
+          selectedIndices.clear();
+        }
+        updateToggleLabel();
+        updatePickerSelectionUI();
         render();
-      }
+      });
+      examPickerList.appendChild(selectAllItem);
 
       examGroups.forEach((group, index) => {
         const { examLabel, scoreLabel, dateLabel } = examOptionParts(group);
 
-        const li = document.createElement('li');
-        li.className = 'exam-picker-item';
-        li.setAttribute('role', 'option');
-        li.setAttribute('aria-selected', 'false');
+        const item = document.createElement('li');
+        const label = document.createElement('label');
+        label.className = 'exam-picker-item';
+        label.dataset.index = String(index);
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
 
         const numberSpan = document.createElement('span');
         numberSpan.className = 'exam-picker-number';
@@ -599,9 +692,16 @@
         dateSpan.className = 'exam-picker-date';
         dateSpan.textContent = dateLabel;
 
-        li.append(numberSpan, scoreSpan, dateSpan);
-        li.addEventListener('click', () => selectExam(index));
-        examPickerList.appendChild(li);
+        label.append(checkbox, numberSpan, scoreSpan, dateSpan);
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) selectedIndices.add(index);
+          else selectedIndices.delete(index);
+          updateToggleLabel();
+          updatePickerSelectionUI();
+          render();
+        });
+        item.appendChild(label);
+        examPickerList.appendChild(item);
       });
 
       examPickerToggle.addEventListener('click', () => {
@@ -621,7 +721,10 @@
       lowConfidenceCheckbox.addEventListener('change', render);
       document.getElementById('download-csv').addEventListener('click', () => downloadCsv(visibleRows));
 
-      selectExam(0);
+      selectedIndices.add(0);
+      updateToggleLabel();
+      updatePickerSelectionUI();
+      render();
     });
   }
 
