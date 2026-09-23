@@ -88,6 +88,9 @@
     grid.hidden = records.length === 0;
     emptyEl.hidden = records.length !== 0;
 
+    const quicklinkCount = document.getElementById('photos-quicklink-count');
+    if (quicklinkCount) quicklinkCount.textContent = String(records.length);
+
     records
       .slice()
       .sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''))
@@ -181,6 +184,20 @@
     return match ? match[1] : null;
   }
 
+  // Images are cached per correction panel (testUrl + questionOrderNumber),
+  // the same granularity used for matched entries — see content.js's
+  // cacheQuestionImage() call in processCorrectionPage().
+  function buildImageIndex(images) {
+    const map = new Map();
+    images.forEach((record) => {
+      if (!record.testUrl || record.questionOrderNumber === undefined || record.questionOrderNumber === null) {
+        return;
+      }
+      map.set(`${record.testUrl}::${record.questionOrderNumber}`, record);
+    });
+    return map;
+  }
+
   function formatDate(iso) {
     if (!iso) return 'Date inconnue';
     const d = new Date(iso);
@@ -220,11 +237,13 @@
       .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
   }
 
-  function buildRows(entries) {
+  function buildRows(entries, imagesByKey) {
     const rows = [];
+    const images = imagesByKey || new Map();
 
     entries.forEach((entry) => {
       if (entry.matched && Array.isArray(entry.subQuestions) && entry.subQuestions.length) {
+        const imageRecord = images.get(`${entry.testUrl}::${entry.questionOrderNumber}`) || null;
         entry.subQuestions.forEach((sq) => {
           rows.push({
             orderNumber: entry.questionOrderNumber ?? entry.questionNumber ?? null,
@@ -241,6 +260,7 @@
             confidence: entry.confidence,
             available: true,
             explanation: sq.explanation || null,
+            imageRecord,
           });
         });
       } else {
@@ -311,7 +331,9 @@
     rows.forEach((row) => {
       const tr = document.createElement('tr');
       const hasExplanation = !!row.explanation;
-      if (hasExplanation) tr.classList.add('has-explanation');
+      const hasImage = !!row.imageRecord;
+      const hasDetail = hasExplanation || hasImage;
+      if (hasDetail) tr.classList.add('has-detail');
 
       const numberTd = document.createElement('td');
       numberTd.textContent = row.orderNumber ?? '—';
@@ -324,7 +346,7 @@
       tr.appendChild(confidenceTd);
 
       const questionTd = document.createElement('td');
-      if (hasExplanation) {
+      if (hasDetail) {
         const toggleIcon = document.createElement('span');
         toggleIcon.className = 'row-toggle-icon';
         toggleIcon.textContent = '▸';
@@ -347,20 +369,40 @@
 
       tbody.appendChild(tr);
 
-      if (hasExplanation) {
+      if (hasDetail) {
         const explanationRow = document.createElement('tr');
         explanationRow.className = 'explanation-row';
         explanationRow.hidden = true;
         const explanationTd = document.createElement('td');
         explanationTd.colSpan = 5;
         explanationTd.className = 'explanation-cell';
-        explanationTd.textContent = row.explanation;
+
+        if (hasExplanation) {
+          const textP = document.createElement('p');
+          textP.className = 'explanation-text';
+          textP.textContent = row.explanation;
+          explanationTd.appendChild(textP);
+        }
+
+        let imgEl = null;
+        let imageLoaded = false;
+        if (hasImage) {
+          imgEl = document.createElement('img');
+          imgEl.className = 'explanation-image';
+          imgEl.alt = row.text || 'Photo de la question';
+          explanationTd.appendChild(imgEl);
+        }
+
         explanationRow.appendChild(explanationTd);
         tbody.appendChild(explanationRow);
 
         tr.addEventListener('click', () => {
           explanationRow.hidden = !explanationRow.hidden;
           tr.classList.toggle('is-expanded', !explanationRow.hidden);
+          if (!explanationRow.hidden && hasImage && !imageLoaded) {
+            imgEl.src = URL.createObjectURL(row.imageRecord.blob);
+            imageLoaded = true;
+          }
         });
       }
     });
@@ -429,13 +471,23 @@
   }
 
   function init() {
-    loadImageCache();
     document.getElementById('clear-images').addEventListener('click', () => {
       if (!window.confirm('Supprimer toutes les photos enregistrées ?')) return;
       clearCachedImages().then(() => loadImageCache());
     });
 
-    chrome.storage.local.get([STORAGE_KEY, SCORES_KEY], (result) => {
+    const storagePromise = new Promise((resolve) => {
+      chrome.storage.local.get([STORAGE_KEY, SCORES_KEY], resolve);
+    });
+    const imagesPromise = getAllCachedImages().catch((err) => {
+      console.error('[Stych Suivi] failed to read image cache', err);
+      return [];
+    });
+
+    Promise.all([storagePromise, imagesPromise]).then(([result, images]) => {
+      renderImageCache(images);
+      const imagesByKey = buildImageIndex(images);
+
       const allEntries = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
       const scores = result[SCORES_KEY] && typeof result[SCORES_KEY] === 'object' ? result[SCORES_KEY] : {};
       const examGroups = getExamGroups(allEntries, scores);
@@ -482,7 +534,7 @@
 
       function render() {
         const group = examGroups[selectedExamIndex];
-        const allRows = buildRows(group.entries);
+        const allRows = buildRows(group.entries, imagesByKey);
         const filters = {
           missedOnly: missedCheckbox.checked,
           lowConfidenceOnly: lowConfidenceCheckbox.checked,

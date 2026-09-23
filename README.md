@@ -175,3 +175,27 @@ et le "tout vider" ; rendu réel via jsdom sur `results.html`/`results.js`
 chargement réel de l'extension avec le nouveau service worker déclaré
 (confirmé actif via "Inspect views service worker" sur `chrome://extensions`
 en mode développeur, aucune erreur).
+
+### Accès rapide et photo directement dans le tableau
+
+Un lien "Photos à revoir" dans le header de la page de résultats
+(`#photos-quicklink`, avec un badge indiquant le nombre de photos en cache)
+fait défiler jusqu'à la section du même nom (`href="#image-cache-section"`,
+défilement fluide via `scroll-behavior: smooth`).
+
+Une ligne du tableau est désormais dépliable (classe `has-detail`, qui
+remplace `has-explanation`) dès qu'elle a une explication **ou** une photo
+en cache, pas uniquement une explication comme avant. La correspondance
+photo ↔ ligne se fait par `(testUrl, questionOrderNumber)` — la même clé
+que celle utilisée pour l'enregistrement dans `background.js`, construite
+une fois par `buildImageIndex()` dans `results.js` puis passée à
+`buildRows()`. La photo n'est chargée (`URL.createObjectURL`) qu'au premier
+dépliage de la ligne, pas au chargement de la page, dans la continuité de
+la gestion frugale de la mémoire déjà appliquée à la section "Photos à
+revoir".
+
+Vérifié via jsdom + `fake-indexeddb` avant de pousser : le badge du lien
+d'accès rapide reflète bien le nombre de photos en cache, une ligne avec
+photo ET explication affiche les deux au dépliage, une ligne sans l'une ni
+l'autre reste non cliquable, et l'`<img>` ne reçoit son `src` qu'au premier
+clic.
