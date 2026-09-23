@@ -39,7 +39,17 @@ function putImage(record) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || message.type !== 'stych-cache-image') return false;
 
-  const blob = new Blob([new Uint8Array(message.buffer)], { type: message.mimeType });
+  // message.base64 crossed the content-script -> background boundary via
+  // chrome.runtime.sendMessage, which JSON-serializes its payload rather
+  // than doing a full structured clone — a raw ArrayBuffer sent directly
+  // arrives here as an empty object, so content.js sends a base64 string
+  // instead (JSON-safe) and it's decoded back into bytes here.
+  const byteString = atob(message.base64);
+  const bytes = new Uint8Array(byteString.length);
+  for (let i = 0; i < byteString.length; i++) {
+    bytes[i] = byteString.charCodeAt(i);
+  }
+  const blob = new Blob([bytes], { type: message.mimeType });
   const record = {
     url: message.url,
     blob,

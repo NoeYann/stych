@@ -199,3 +199,30 @@ d'accès rapide reflète bien le nombre de photos en cache, une ligne avec
 photo ET explication affiche les deux au dépliage, une ligne sans l'une ni
 l'autre reste non cliquable, et l'`<img>` ne reçoit son `src` qu'au premier
 clic.
+
+### Bug corrigé : photos jamais affichées (icône cassée partout)
+
+En usage réel, aucune photo ne s'affichait — ni dans la grille "Photos à
+revoir", ni dans une ligne dépliée — uniquement l'icône de photo cassée du
+navigateur. Root cause confirmée : `chrome.runtime.sendMessage`, utilisé
+pour relayer les octets de l'image de `content.js` (origine stych.fr) vers
+`background.js` (origine de l'extension), **sérialise son message en JSON**
+et ne fait pas un structured clone complet — un `ArrayBuffer` envoyé tel
+quel arrive donc de l'autre côté comme un objet vide (`{}`). `background.js`
+construisait alors un `Blob` de 0 octet (`new Blob([new Uint8Array({})],
+...)` ne lève pas d'erreur mais produit un tableau de longueur 0), d'où une
+image invalide à chaque fois, y compris dans la grille qui charge ses
+vignettes immédiatement (pas seulement au clic sur une ligne).
+
+Confirmé par un test Node : `JSON.parse(JSON.stringify({ buffer:
+someArrayBuffer }))` donne bien `{ buffer: {} }`.
+
+**Correctif** : `content.js` encode désormais l'image en base64
+(`FileReader.readAsDataURL`, préfixe `data:...;base64,` retiré) avant
+`sendMessage` — une chaîne de caractères survit intacte à la sérialisation
+JSON — et `background.js` la décode en octets (`atob` + boucle
+`charCodeAt`, disponible dans le service worker) avant de construire le
+`Blob`. Vérifié par un test Node round-trip (2000 octets aléatoires,
+y compris toutes les valeurs 0-255) : les octets décodés correspondent
+exactement aux octets d'origine. Chargement réel de l'extension re-confirmé
+(service worker actif, `atob`/`btoa` disponibles dans ce contexte).

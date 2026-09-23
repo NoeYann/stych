@@ -286,18 +286,37 @@
     return null;
   }
 
+  // chrome.runtime.sendMessage JSON-serializes its payload rather than doing
+  // a full structured clone: a raw ArrayBuffer sent directly arrives on the
+  // other end as an empty object, silently producing a 0-byte Blob (the
+  // actual cause of a previous "broken image icon everywhere" bug). A
+  // base64 string survives JSON serialization intact, so encode here and
+  // decode back into bytes in background.js.
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result;
+        const commaIndex = result.indexOf(',');
+        resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  }
+
   async function cacheQuestionImage(imageUrl, meta) {
     try {
       const absoluteUrl = new URL(imageUrl, location.href).href;
       const response = await fetch(absoluteUrl);
       if (!response.ok) return;
       const blob = await response.blob();
-      const buffer = await blob.arrayBuffer();
+      const base64 = await blobToBase64(blob);
       chrome.runtime.sendMessage({
         type: 'stych-cache-image',
         url: imageUrl,
         mimeType: blob.type || 'image/jpeg',
-        buffer,
+        base64,
         meta,
       });
     } catch (err) {
