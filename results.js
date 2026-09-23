@@ -328,12 +328,13 @@
     const tbody = document.getElementById('results-body');
     tbody.innerHTML = '';
 
-    rows.forEach((row) => {
+    rows.forEach((row, index) => {
       const tr = document.createElement('tr');
       const hasExplanation = !!row.explanation;
       const hasImage = !!row.imageRecord;
       const hasDetail = hasExplanation || hasImage;
       if (hasDetail) tr.classList.add('has-detail');
+      if (index % 2 === 1) tr.classList.add('row-stripe');
 
       const numberTd = document.createElement('td');
       numberTd.textContent = row.orderNumber ?? '—';
@@ -357,13 +358,26 @@
       tr.appendChild(questionTd);
 
       const answerTd = document.createElement('td');
-      answerTd.textContent = row.selectedLabel;
       if (row.available) {
         answerTd.classList.add(row.isCorrect ? 'cell-correct' : 'cell-incorrect');
+        const icon = document.createElement('span');
+        icon.className = 'answer-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = row.isCorrect ? '✓' : '✗';
+        answerTd.appendChild(icon);
+        const srLabel = document.createElement('span');
+        srLabel.className = 'sr-only';
+        srLabel.textContent = row.isCorrect ? 'Correct : ' : 'Incorrect : ';
+        answerTd.appendChild(srLabel);
       }
+      answerTd.appendChild(document.createTextNode(row.selectedLabel));
       tr.appendChild(answerTd);
 
       const correctTd = document.createElement('td');
+      correctTd.classList.add('correct-answer-cell');
+      if (row.available && row.isCorrect === false) {
+        correctTd.classList.add('is-correction');
+      }
       correctTd.textContent = row.correctLabel;
       tr.appendChild(correctTd);
 

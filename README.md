@@ -226,3 +226,42 @@ JSON — et `background.js` la décode en octets (`atob` + boucle
 y compris toutes les valeurs 0-255) : les octets décodés correspondent
 exactement aux octets d'origine. Chargement réel de l'extension re-confirmé
 (service worker actif, `atob`/`btoa` disponibles dans ce contexte).
+
+## Refonte visuelle du tableau de résultats
+
+Suite à une revue UI/UX, quatre correctifs "gains rapides" ont été
+appliqués au tableau de la page résultats :
+
+- **En-têtes de colonnes collants** (`thead th { position: sticky; top: 0;
+  }`) : restent visibles en scrollant un examen à 40 questions.
+- **Colonne "Ta réponse" : bordure gauche + icône plutôt que fond plein.**
+  Un fond entièrement coloré dupliquait visuellement le rôle de la colonne
+  Confiance (qui utilise déjà rouge/orange/vert) — un utilisateur pouvait
+  scanner la mauvaise colonne et mal lire "vert = confiance haute" comme
+  "vert = juste". Remplacé par `border-left: 4px solid` + fond très
+  légèrement teinté (6-8% d'opacité), plus une icône `✓`/`✗` et un texte
+  accessible caché (`.sr-only`, "Correct : "/"Incorrect : ") pour ne pas
+  dépendre uniquement de la couleur (accessibilité daltonisme). Une réponse
+  fausse passe aussi en gras pour attirer l'œil sur les erreurs — c'est
+  l'usage principal de l'outil.
+- **Colonne "Bonne réponse" en italique**, pour la marquer visuellement
+  comme une info de référence/correction plutôt que la réponse de
+  l'utilisateur. Elle ne passe en gras + vert que lorsqu'elle diffère
+  réellement de la réponse choisie (`row.isCorrect === false`), pour ne
+  pas décorer inutilement les ~30 lignes déjà correctes d'un examen.
+  Soulignement délibérément évité : sur le web il connote un lien
+  cliquable, ce qui aurait été trompeur sur du texte statique.
+- **Alternance de fond des lignes** (zebra striping), appliquée via une
+  classe JS (`row-stripe`, sur un compteur de lignes réellement affichées)
+  plutôt que `:nth-child` en CSS pur — les lignes d'explication/photo
+  masquées insérées après certaines lignes auraient décalé le calcul de
+  parité CSS et cassé le motif.
+- Palette centralisée dans des variables CSS (`:root { --color-success,
+  --color-danger, --color-warning, --color-primary }`) dans `results.css`,
+  pour sécuriser toute future retouche de couleurs.
+
+Vérifié via jsdom (fake-indexeddb) avant de pousser : icône ✓ + pas de
+classe `is-correction` sur une ligne juste, icône ✗ + classe `is-correction`
+sur une ligne fausse, alternance `row-stripe` correcte sur l'index des
+lignes réellement affichées (pas des lignes DOM brutes), texte accessible
+`.sr-only` présent.
